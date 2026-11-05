@@ -1,0 +1,3 @@
+il-supermarket-scraper==1.0.19
+boto3
+tzdata
