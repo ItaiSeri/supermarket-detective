@@ -88,10 +88,18 @@ Library notes from the test (il-supermarket-scraper 1.0.19): scraper classes tak
 
 ## Plan
 
-1. **Day 1 - prove the risky parts.** ~~Run the scraper once in AWS Tel Aviv: are the seven blocked chains reachable?~~ Done 2026-11-03: yes, all of them. **Upload test done 2026-11-03:** schema `workspace.landing` + managed volume `raw` created; a 32.8 MB Kaggle price file uploaded through the Files API in 7 s and read back with SQL on the 2X-Small warehouse (`a000b0ebdfdcd00b`). Lesson: read the Kaggle CSVs with `multiLine => true, escape => '"'`; without it, line breaks inside product names split rows (163,660 rows and 41 "stores" instead of 163,176 and 13). This becomes the first reconciliation check (row count vs. the file's own count). Still open: sign up for Databricks Free Edition; upload one file to a Volume via the Files API; connect Power BI Desktop to the SQL warehouse (not confirmed for Free Edition; fallback is exporting gold tables to Parquet).
-2. **Days 2-4 - daily ingestion in the cloud.** Container image → ECR, Lambda + Step Functions, daily schedule, S3 archive, upload to the Volume, failure alarm. From here history accumulates without the laptop.
-3. **Week 2 - bronze + silver** for two chains with different layouts, then the rest via `chain_config`. SCD2 history, quality checks, ops tables.
-4. **Week 2-3 - backfill** from Kaggle: weekly snapshots back to 2024-09-22 plus daily for the last 60 days, sampled stores only.
-5. **Week 3 - gold + Power BI v1.** First X post: the Eilat VAT check.
-6. **Before 2026-12-04 - the Hanukkah index,** comparing with Hanukkah 2025 (2025-12-14 to 12-22) from the backfill. Then fake promotions and shrinkflation.
-7. Optional: n8n + LLM alert to Telegram when a quality check fails.
+| # | Milestone | What exists at the end | Target |
+|---|---|---|---|
+| 0 | Prove the risky parts | AWS Tel Aviv reaches every chain, Databricks accepts uploads, Power BI connects to the Free Edition warehouse | Done 2026-11-03 |
+| 1 | Daily collection in the cloud | Every morning at 07:00 AWS downloads all chains' files into S3 and copies them to the Databricks volume, with no laptop involved | ~2026-11-10 |
+| 2 | Bronze + silver | Raw files become clean tables (stores, products, prices) with SCD2 price history, quality checks, quarantine and ops tables; two chains first, then the rest via `chain_config` | ~2026-11-17 |
+| 3 | History backfill | Kaggle snapshots (weekly back to 2024-09-22, daily for the last 60 days and around Hanukkah 2025) in the same S3 bucket under `source=kaggle/`, sampled stores only, through the same bronze/silver | ~2026-11-21 |
+| 4 | Gold + Power BI v1 | Price index and the Eilat VAT check; first X post | ~2026-11-28 |
+| 5 | Hanukkah index | Holiday prices 2026 vs. Hanukkah 2025 (2025-12-14 to 12-22) | before 2026-12-04 |
+| 6 | Extras | Fake promotions, shrinkflation, pipeline health page, n8n + LLM alert to Telegram | December |
+
+Why daily collection comes before history: the chain sites keep only recent files, so every day without the daily run is lost raw data, while Kaggle's archive stays online. The backfill reuses the daily path (same bucket, layout and loading), and which stores to backfill is decided while building silver.
+
+Milestone 1 is built in eight pieces, each working before the next: (1) Terraform setup + S3 raw bucket, (2) ECR repository, (3) `fetch_chain` Python code, (4) Lambda + IAM role, (5) Step Functions Map over the chain list, (6) EventBridge Scheduler at 07:00, (7) push to the Databricks volume, (8) failure alarm by email.
+
+Milestone 0 results (2026-11-03): all seven geo-blocked chains answered a Lambda in il-central-1. A 32.8 MB Kaggle price file uploaded to the volume in 7 s and read with SQL; the Kaggle CSVs need `multiLine => true, escape => '"'`, otherwise line breaks inside product names split rows (163,660 rows and 41 "stores" instead of 163,176 and 13), which becomes the first reconciliation check. Power BI Desktop imported a test table from the warehouse (Databricks connector, Import mode).

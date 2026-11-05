@@ -5,3 +5,6 @@ __pycache__/
 .env
 .databricks/
 powerbi/*.pbix.bak
+.terraform/
+*.tfstate
+*.tfstate.*
