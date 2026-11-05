@@ -13,6 +13,10 @@ from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+# the scraper opens logging.log in the current folder as soon as it is imported;
+# in Lambda the code folder (/var/task) is read-only, only /tmp is writable
+os.chdir(tempfile.gettempdir())
+
 import boto3
 from il_supermarket_scarper import ScraperFactory
 from il_supermarket_scarper.utils import DiskFileOutput
