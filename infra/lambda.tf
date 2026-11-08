@@ -1,7 +1,7 @@
 variable "fetch_chain_image_tag" {
   description = "Which image version in ECR the Lambda runs"
   type        = string
-  default     = "v2"
+  default     = "v3"
 }
 
 # who may use this role: only the Lambda service

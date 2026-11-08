@@ -27,11 +27,35 @@ DEFAULT_FILE_TYPES = ["STORE_FILE", "PRICE_FULL_FILE", "PROMO_FULL_FILE"]
 s3 = boto3.client("s3")
 
 
-async def download(chain, folder, file_types, limit, store_id):
+def ship(path, prefix):
+    """Zip one downloaded file, upload it to S3, delete the local copies. Returns (key, size)."""
+    # the scraper unzips the chain's .gz on download; zip it back so S3 stores ~20x less
+    if path.suffix == ".gz":
+        gz_path = path  # already compressed: upload as is
+    else:
+        gz_path = path.with_name(path.name + ".gz")
+        with open(path, "rb") as src, gzip.open(gz_path, "wb") as dst:
+            shutil.copyfileobj(src, dst)  # streams in chunks, not the whole file in memory
+    key = f"{prefix}/{gz_path.name}"
+    s3.upload_file(str(gz_path), BUCKET, key)
+    size = gz_path.stat().st_size
+    path.unlink(missing_ok=True)
+    gz_path.unlink(missing_ok=True)  # a full chain is more than /tmp can hold at once
+    return key, size
+
+
+async def download_and_ship(chain, folder, file_types, limit, store_id, prefix, uploaded, failures):
     scraper = ScraperFactory.get(chain)(file_output=DiskFileOutput(storage_path=folder))
-    # scrape() is an async generator: it yields once per downloaded file
-    async for _ in scraper.scrape(limit=limit, files_types=file_types, store_id=store_id):
-        pass
+    # scrape() is an async generator: it yields once per finished file, at most 10 in flight.
+    # It starts no new downloads while this loop body runs, so /tmp stays small.
+    async for result in scraper.scrape(limit=limit, files_types=file_types, store_id=store_id):
+        if result.error or not result.extract_succefully:  # sic: the library's spelling
+            failures.append(f"{result.file_name}: {result.error}"[:200])
+            continue
+        path = Path(folder) / result.file_name
+        if path.exists():  # missing means the scraper skipped it as identical content
+            key, size = await asyncio.to_thread(ship, path, prefix)
+            uploaded[key] = size
 
 
 def handler(event, context=None):
@@ -45,8 +69,8 @@ def handler(event, context=None):
     prefix = f"source=scraper/date={run_date}/chain={chain}"
 
     error = None
-    uploaded = []
-    total_bytes = 0
+    uploaded = {}  # S3 key -> size; a file listed twice overwrites its own key
+    failures = []
     old_cwd = os.getcwd()
 
     with tempfile.TemporaryDirectory() as tmp:
@@ -55,34 +79,31 @@ def handler(event, context=None):
         try:
             folder = Path(tmp) / "files"
             try:
-                asyncio.run(download(chain, str(folder), file_types, limit, store_id))
+                asyncio.run(
+                    download_and_ship(
+                        chain, str(folder), file_types, limit, store_id, prefix, uploaded, failures
+                    )
+                )
             except Exception as e:
                 error = f"{type(e).__name__}: {e}"[:300]
-
-            files = [f for f in folder.rglob("*") if f.is_file() and f.suffix != ".json"]
-            for f in files:
-                # the scraper unzips the chain's .gz on download; zip it back so S3 stores ~10x less
-                if f.suffix == ".gz":
-                    gz_path = f  # already compressed: upload as is
-                else:
-                    gz_path = f.with_name(f.name + ".gz")
-                    with open(f, "rb") as src, gzip.open(gz_path, "wb") as dst:
-                        shutil.copyfileobj(src, dst)  # streams in chunks, not the whole file in memory
-                key = f"{prefix}/{gz_path.name}"
-                s3.upload_file(str(gz_path), BUCKET, key)
-                uploaded.append(key)
-                total_bytes += gz_path.stat().st_size
         finally:
             os.chdir(old_cwd)  # Windows can't delete a folder you're standing in
+
+    # the scraper swallows site timeouts, so zero files is the only sign of a dead site;
+    # raising makes the run a real failure that Step Functions can retry
+    if not uploaded:
+        reason = error or (failures[0] if failures else "the site returned no files")
+        raise RuntimeError(f"{chain}: nothing uploaded ({reason})")
 
     return {
         "chain": chain,
         "date": run_date,
-        "ok": bool(uploaded) and error is None,
+        "ok": error is None and not failures,
         "files": len(uploaded),
-        "bytes": total_bytes,
+        "failed": len(failures),
+        "bytes": sum(uploaded.values()),
         "s3_prefix": f"s3://{BUCKET}/{prefix}/",
-        "error": error,
+        "error": error or (failures[0] if failures else None),
         "secs": round(time.time() - started, 1),
     }
 
