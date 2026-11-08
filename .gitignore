@@ -8,4 +8,5 @@ powerbi/*.pbix.bak
 .terraform/
 *.tfstate
 *.tfstate.*
+*.tfvars
 *.log
