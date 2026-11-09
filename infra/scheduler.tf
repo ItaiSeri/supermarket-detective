@@ -29,8 +29,9 @@ resource "aws_iam_role_policy" "daily_schedule_start" {
 }
 
 resource "aws_scheduler_schedule" "daily_collect" {
-  name                         = "supermarket-detective-daily-collect"
-  schedule_expression          = "cron(0 7 * * ? *)"
+  name = "supermarket-detective-daily-collect"
+  # 09:00, because the scraper disables Victory and Mahsani Ashuk until 08:00
+  schedule_expression          = "cron(0 9 * * ? *)"
   schedule_expression_timezone = "Asia/Jerusalem"
 
   flexible_time_window {
