@@ -1,0 +1,9 @@
+bundle:
+  name: supermarket-detective
+
+workspace:
+  profile: supermarket
+
+targets:
+  dev:
+    default: true

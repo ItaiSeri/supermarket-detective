@@ -54,6 +54,11 @@ data "aws_iam_policy_document" "databricks_read" {
     actions   = ["s3:GetObject", "s3:GetObjectVersion"]
     resources = ["${aws_s3_bucket.raw.arn}/*"]
   }
+  # bronze is the only place Databricks may write; raw files stay read-only
+  statement {
+    actions   = ["s3:PutObject", "s3:DeleteObject", "s3:AbortMultipartUpload"]
+    resources = ["${aws_s3_bucket.raw.arn}/bronze/*"]
+  }
   # Unity Catalog checks that the role can assume itself
   statement {
     actions   = ["sts:AssumeRole"]
