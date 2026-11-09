@@ -10,22 +10,22 @@ Stack: AWS (Tel Aviv region, ingestion) → Databricks Free Edition (Unity Catal
 ```
 AWS il-central-1 (Tel Aviv)               DATABRICKS FREE EDITION                        POWER BI
 ---------------------------               ------------------------------------------     ---------------
-EventBridge Scheduler (daily 07:00)       Volume /Volumes/<cat>/landing/raw/             Desktop (authoring),
-  -> Step Functions state machine           source=scraper|kaggle/date=/chain=/          Import from the SQL
-     Map state, one branch per chain        manifest/                                     warehouse
-     (from chain_list.json), retries             |                                       star schema over gold:
-     per chain                                   | Auto Loader (new files only)            fact_price_daily,
+EventBridge Scheduler (daily 07:00)       External location supermarket_raw (read-only)  Desktop (authoring),
+  -> Step Functions state machine           reads S3 directly, no copy:                  Import from the SQL
+     Map state, one item per chain +        source=scraper|kaggle/date=/chain=/           warehouse
+     file type (30, from chains.json),           |                                       star schema over gold:
+     10 at a time, retries per item              | Auto Loader (new files only)            fact_price_daily,
        -> Lambda fetch_chain (container)         v                                         dim_product, dim_store,
           a) il-supermarket-scraper:      BRONZE raw_files: one row per file               dim_chain, dim_date
-             raw XML, sampled store ids,         (path, source, chain, payload, metadata)  pages: price index,
+             raw XML, all branches,              (path, source, chain, payload, metadata)  pages: price index,
              PriceFull/PromoFull/Stores          | config-driven parse (chain_config)      Eilat check, fake promos,
           b) or kagglehub: that day's            v                                         shrinkflation,
              Kaggle file (geo-blocked)    SILVER stores, items (barcode master),          pipeline health
           -> S3 raw bucket (versioned)           price_obs, price_history (SCD2),
           -> manifest row                        promotions + promo_items, quarantine
-  -> Lambda push_to_databricks                   |
-     (Files API upload of the day's files)       v
-  -> CloudWatch alarm on a failed run     GOLD   price_index_daily (fixed basket), eilat_vs_center,
+  -> on a failed run: EventBridge rule           |
+     -> SNS topic -> email                       v
+                                          GOLD   price_index_daily (fixed basket), eilat_vs_center,
                                                  fake_promo_candidates, shrinkflation_candidates
 One-off backfill: same Lambda, Map over
  sampled Kaggle versions (2024-09-22 on)
@@ -34,11 +34,13 @@ One-off backfill: same Lambda, Map over
 
 ### Design decisions
 
-- **Ingestion lives in AWS, not in Databricks.** Free Edition only reaches a short list of trusted domains (LinkedIn verification may widen it, still to test). The Tel Aviv region also gives an Israeli IP for chains that block foreign traffic; whether they accept AWS addresses is the first thing to test.
-- **Lambda per chain, orchestrated by Step Functions.** One Lambda run collects all of a chain's branches. A full chain unzips to 2 GB or more, more than the function's 2 GB /tmp, so the handler zips, uploads and deletes each file as it arrives (load test 2026-11-08). It also means a run killed at the 15-minute limit keeps what it already uploaded. The Map state runs chains in parallel and retries each one alone, so one broken chain site doesn't fail the whole day. The scraper's headless browser (Playwright) is only a fallback for reading the chain list from gov.il, not for downloading files; the container image includes it anyway. Fargate is the fallback if a chain ever needs longer than 15 minutes.
+- **Ingestion lives in AWS, not in Databricks.** The Tel Aviv region gives an Israeli IP for chains that block foreign traffic (tested 2026-11-03), and Free Edition compute runs in Ohio (`us-east-2`).
+- **Databricks reads S3 directly; raw is not copied.** A read-only Unity Catalog external location (`supermarket_raw`) uses IAM role `supermarket-detective-databricks-read`. Tested on Free Edition 2026-11-09: `LIST` and `read_files` work, and `.gz` is decompressed automatically. The storage credential and external location were created with the Databricks CLI (exact commands in the project log). The docs state a limited set of trusted outbound domains, but S3 was reachable in a real test, so re-test if it ever stops working. Auto Loader should use directory listing, because the role has no SQS/SNS permissions.
+- **One Lambda function, one Map item per chain + file type.** 10 chains x 3 file types = 30 inputs to the same function, each with its own 15 minutes. A whole Shufersal day doesn't fit in one run; prices alone took 10.5 minutes (2026-11-08). A full chain also unzips to 2 GB or more, more than the function's 2 GB /tmp, so the handler zips, uploads and deletes each file as it arrives. A run killed at the 15-minute limit keeps what it already uploaded. Each item retries alone after 10 and 20 minutes, a failed item doesn't stop the others, and a final check marks the whole run failed if any item failed, which triggers the email alarm. `ok: true` means the files seen were saved, not that the list was complete: the scraper swallows listing timeouts, so silver needs a completeness check. The scraper's headless browser (Playwright) is only a fallback for reading the chain list from gov.il, not for downloading files; the container image includes it anyway. Fargate is the fallback if a chain ever needs longer than 15 minutes.
   - Considered and skipped: Lambda Managed Instances (90-minute timeout since 2026-09) run on EC2 capacity billed even when idle, so they cost more than this daily batch needs. Lambda durable functions (announced for Tel Aviv in 2026-04) could replace Step Functions as the orchestrator; Step Functions gives a visual run graph, which is better for a portfolio.
 - **Two sources, one bronze.** Our own scraper keeps the raw XML (the real integration work); the Kaggle daily snapshot supplies history and the geo-blocked chains. Both land in the same raw layout tagged with `source`, and on days both cover a chain, a reconciliation check compares them.
 - **S3 is the archive of record.** Raw files are kept forever in a versioned bucket; Databricks can be rebuilt from it.
+- **`date=` in the S3 path is the collection date, not the file's date.** A run also collects older files still listed on a chain's site, so silver takes each file's date from its name.
 - **Bronze keeps files exactly as published.** Parsing happens in silver, so a parser bug never loses data: fix it and re-run silver.
 - **One parser, driven by config.** A `chain_config` table maps each chain's layout to one schema. Adding a chain is a new row, not new code. Same idea as the partition-wise PL/SQL framework at Mizrahi.
 - **Price history is SCD Type 2,** keyed on chain + store + barcode: a new row only when the price changes, with `valid_from` / `valid_to`. Daily full files make this the "source sends a full dump" CDC problem.
@@ -91,7 +93,7 @@ Library notes from the test (il-supermarket-scraper 1.0.19): scraper classes tak
 | # | Milestone | What exists at the end | Target |
 |---|---|---|---|
 | 0 | Prove the risky parts | AWS Tel Aviv reaches every chain, Databricks accepts uploads, Power BI connects to the Free Edition warehouse | Done 2026-11-03 |
-| 1 | Daily collection in the cloud | Every morning at 07:00 AWS downloads all chains' files into S3 and copies them to the Databricks volume, with no laptop involved | ~2026-11-10 |
+| 1 | Daily collection in the cloud | Every morning at 07:00 AWS downloads all chains' files into S3, where Databricks can read them directly, with no laptop involved | ~2026-11-10 |
 | 2 | Bronze + silver | Raw files become clean tables (stores, products, prices) with SCD2 price history, quality checks, quarantine and ops tables; two chains first, then the rest via `chain_config` | ~2026-11-17 |
 | 3 | History backfill | Kaggle snapshots (weekly back to 2024-09-22, daily for the last 60 days and around Hanukkah 2025) in the same S3 bucket under `source=kaggle/`, sampled stores only, through the same bronze/silver | ~2026-11-21 |
 | 4 | Gold + Power BI v1 | Price index and the Eilat VAT check; first X post | ~2026-11-28 |
@@ -100,6 +102,6 @@ Library notes from the test (il-supermarket-scraper 1.0.19): scraper classes tak
 
 Why daily collection comes before history: the chain sites keep only recent files, so every day without the daily run is lost raw data, while Kaggle's archive stays online. The backfill reuses the daily path (same bucket, layout and loading), and which stores to backfill is decided while building silver.
 
-Milestone 1 is built in eight pieces, each working before the next: (1) Terraform setup + S3 raw bucket, (2) ECR repository, (3) `fetch_chain` Python code, (4) Lambda + IAM role, (5) Step Functions Map over the chain list, (6) EventBridge Scheduler at 07:00, (7) push to the Databricks volume, (8) failure alarm by email.
+Milestone 1 is built in eight pieces, each working before the next: (1) Terraform setup + S3 raw bucket, (2) ECR repository, (3) `fetch_chain` Python code, (4) Lambda + IAM role, (5) Step Functions Map over the chain list, (6) EventBridge Scheduler at 07:00, (7) Databricks read access to S3 (first planned as a push to a volume), (8) failure alarm by email.
 
 Milestone 0 results (2026-11-03): all seven geo-blocked chains answered a Lambda in il-central-1. A 32.8 MB Kaggle price file uploaded to the volume in 7 s and read with SQL; the Kaggle CSVs need `multiLine => true, escape => '"'`, otherwise line breaks inside product names split rows (163,660 rows and 41 "stores" instead of 163,176 and 13), which becomes the first reconciliation check. Power BI Desktop imported a test table from the warehouse (Databricks connector, Import mode).

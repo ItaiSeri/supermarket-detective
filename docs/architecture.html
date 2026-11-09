@@ -154,7 +154,7 @@ a:focus-visible { outline: 2px solid var(--daily); outline-offset: 2px; }
 
 <figure>
   <div class="scroll">
-  <svg viewBox="0 0 1300 640" role="img" aria-label="Two ingestion lanes in AWS Tel Aviv, a one-off history prep from past Kaggle versions and a daily run from the chain sites and today's Kaggle file, both write to one versioned S3 archive. A Lambda pushes new files to a Databricks volume, where one pipeline builds bronze, silver and gold tables plus operations tables. Power BI reads gold and ops; charts go to X.">
+  <svg viewBox="0 0 1300 640" role="img" aria-label="Two ingestion lanes in AWS Tel Aviv, a one-off history prep from past Kaggle versions and a daily run from the chain sites and today's Kaggle file, both write to one versioned S3 archive. Databricks reads the S3 archive directly through a read-only external location, and one pipeline builds bronze, silver and gold tables plus operations tables. Power BI reads gold and ops; charts go to X.">
     <defs>
       <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="ah"/></marker>
       <marker id="ad" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="ah-d"/></marker>
@@ -194,11 +194,11 @@ a:focus-visible { outline: 2px solid var(--daily); outline-offset: 2px; }
 
     <rect x="300" y="184" width="170" height="62" rx="6" class="box box-d"/>
     <text x="312" y="208" class="bt">Step Functions</text>
-    <text x="312" y="228" class="bs">Map: 1 branch/chain</text>
+    <text x="312" y="228" class="bs">Map: chain × file type</text>
 
     <rect x="300" y="300" width="170" height="62" rx="6" class="box box-d"/>
     <text x="312" y="324" class="bt">Lambda fetch_chain</text>
-    <text x="312" y="344" class="bs">sampled stores</text>
+    <text x="312" y="344" class="bs">all branches</text>
 
     <!-- AWS: history lane -->
     <text x="595" y="140" class="znote" text-anchor="middle">started by hand, once</text>
@@ -215,14 +215,10 @@ a:focus-visible { outline: 2px solid var(--daily); outline-offset: 2px; }
     <text x="312" y="444" class="bt">S3 raw archive (versioned, kept forever)</text>
     <text x="312" y="464" class="bs">source=scraper|kaggle / date= / chain= + manifest</text>
 
-    <rect x="510" y="540" width="170" height="62" rx="6" class="box"/>
-    <text x="522" y="564" class="bt">Lambda push</text>
-    <text x="522" y="584" class="bs">new files only</text>
-
     <!-- Databricks: medallion stacked bottom-up -->
     <rect x="732" y="540" width="210" height="62" rx="6" class="box"/>
-    <text x="744" y="564" class="bt">Volume: landing/raw</text>
-    <text x="744" y="584" class="bs">files arrive here</text>
+    <text x="744" y="564" class="bt">External location</text>
+    <text x="744" y="584" class="bs">supermarket_raw, read-only</text>
 
     <rect x="732" y="420" width="210" height="62" rx="6" class="box"/>
     <text x="744" y="444" class="bt">Bronze: raw_files</text>
@@ -269,7 +265,7 @@ a:focus-visible { outline: 2px solid var(--daily); outline-offset: 2px; }
     <path d="M385 152 V182" class="e e-d" marker-end="url(#ad)"/>
     <text x="393" y="172" class="el el-d">starts</text>
     <path d="M385 246 V298" class="e e-d" marker-end="url(#ad)"/>
-    <text x="393" y="276" class="el el-d">1 per chain</text>
+    <text x="393" y="276" class="el el-d">30 inputs</text>
     <path d="M385 362 V418" class="e e-d" marker-end="url(#ad)"/>
     <text x="393" y="394" class="el el-d">writes files</text>
 
@@ -280,10 +276,8 @@ a:focus-visible { outline: 2px solid var(--daily); outline-offset: 2px; }
     <text x="603" y="394" class="el el-h">writes files</text>
 
     <!-- shared path -->
-    <path d="M595 482 V538" class="e" marker-end="url(#a)"/>
-    <text x="603" y="514" class="el">S3 event</text>
-    <path d="M680 571 H730" class="e" marker-end="url(#a)"/>
-    <text x="686" y="562" class="el">upload</text>
+    <path d="M595 482 V571 H730" class="e" marker-end="url(#a)"/>
+    <text x="603" y="540" class="el">read directly</text>
 
     <path d="M837 540 V484" class="e" marker-end="url(#a)"/>
     <text x="845" y="516" class="el">Auto Loader</text>
@@ -300,7 +294,7 @@ a:focus-visible { outline: 2px solid var(--daily); outline-offset: 2px; }
     <text x="1207" y="330" class="el">charts</text>
   </svg>
   </div>
-  <figcaption>Both lanes write to the same S3 archive in the same folder layout, so everything after S3 doesn't care where a file came from. The medallion is drawn bottom-up: raw files at the bottom, report tables at the top. Not drawn: a CloudWatch alarm emails on any failed Step Functions run, and Power BI Desktop runs on the laptop only as the authoring tool; nothing scheduled runs there.</figcaption>
+  <figcaption>Both lanes write to the same S3 archive in the same folder layout, so everything after S3 doesn't care where a file came from. The medallion is drawn bottom-up: raw files at the bottom, report tables at the top. Not drawn: an EventBridge rule and SNS send an email on any failed Step Functions run, and Power BI Desktop runs on the laptop only as the authoring tool; nothing scheduled runs there.</figcaption>
 </figure>
 
 <section>
@@ -316,8 +310,8 @@ a:focus-visible { outline: 2px solid var(--daily); outline-offset: 2px; }
     <tbody>
       <tr><th>When</th><td>Once, started by hand. Re-runnable for any missed date.</td><td>Every day at 07:00 Israel time.</td></tr>
       <tr><th>Source</th><td>Past Kaggle versions, one per day, 2024-09-22 to yesterday. <span class="mono">index.json</span> maps version number to date.</td><td>Chain sites for every chain (raw XML), including the 7 that block foreign traffic. Today's Kaggle file only if a chain's site fails.</td></tr>
-      <tr><th>Scope</th><td>Weekly snapshots back to 2024-09-22, daily for the last 60 days, daily around Hanukkah 2025 (Dec 14–22). Sampled stores only.</td><td>About 8 chains to start, every Eilat branch plus about 3 central branches each. Price, promo and store files.</td></tr>
-      <tr><th>Unit of work</th><td>One Lambda per date × chain, run in parallel by the Map state.</td><td>One Lambda per chain; a broken chain site fails and retries alone.</td></tr>
+      <tr><th>Scope</th><td>Weekly snapshots back to 2024-09-22, daily for the last 60 days, daily around Hanukkah 2025 (Dec 14–22). Sampled stores only.</td><td>10 major chains, all branches. Price, promo and store files. Silver decides which stores to keep.</td></tr>
+      <tr><th>Unit of work</th><td>One Lambda per date × chain, run in parallel by the Map state.</td><td>One Lambda run per chain + file type, 30 inputs to one function; a broken chain site fails and retries alone.</td></tr>
       <tr><th>Lands as</th><td><span class="mono">source=kaggle/date=…/chain=…/</span></td><td><span class="mono">source=scraper/…</span> or <span class="mono">source=kaggle/…</span></td></tr>
       <tr><th>Safe to re-run</th><td>Yes. The S3 key is fixed per date, chain and file, so a re-run overwrites; S3 versioning keeps the old copy.</td><td>Yes, for the same reason. Auto Loader only picks up files it hasn't seen.</td></tr>
     </tbody>
@@ -365,22 +359,22 @@ a:focus-visible { outline: 2px solid var(--daily); outline-offset: 2px; }
     <div class="row">
       <div class="layer">Where ingestion runs</div>
       <div><div class="pick">AWS, Tel Aviv region</div><div class="instead">Instead of <b>the home PC</b>, <b>GitHub Actions</b>, <b>a Databricks job</b></div></div>
-      <div class="reason"><p>It has to run in the cloud, and 7 chains block foreign traffic, so it needs an Israeli address. Tested on 2026-11-03: a Lambda here downloaded files from all 7. Databricks Free Edition can only reach a short list of trusted sites, and GitHub's runners are outside Israel.</p></div>
+      <div class="reason"><p>It has to run in the cloud, and 7 chains block foreign traffic, so it needs an Israeli address. Tested on 2026-11-03: a Lambda here downloaded files from all 7. GitHub's runners are outside Israel.</p></div>
     </div>
     <div class="row">
       <div class="layer">Compute</div>
-      <div><div class="pick">Lambda, one per chain</div><div class="instead">Instead of <b>Fargate</b>, <b>Lambda Managed Instances</b></div></div>
-      <div class="reason"><p>The scraper can download chosen stores and file types only, so one chain fits well inside Lambda's 15 minutes, and Lambda is close to free at this volume. Managed Instances allow 90 minutes but bill EC2 servers even when idle. Fargate stays the fallback if a chain ever needs longer.</p></div>
+      <div><div class="pick">Lambda, one run per chain + file type</div><div class="instead">Instead of <b>Fargate</b>, <b>Lambda Managed Instances</b></div></div>
+      <div class="reason"><p>A whole Shufersal day doesn't fit in Lambda's 15 minutes, so each chain is split by file type; Shufersal's prices alone took 10.5 minutes. Each file is zipped, uploaded and deleted as it arrives, so a full chain never fills the 2 GB disk. Lambda is close to free at this volume. Managed Instances allow 90 minutes but bill EC2 servers even when idle. Fargate stays the fallback if a chain ever needs longer.</p></div>
     </div>
     <div class="row">
       <div class="layer">Orchestration</div>
       <div><div class="pick">Step Functions</div><div class="instead">Instead of <b>Airflow (MWAA)</b>, <b>Lambda durable functions</b>, <b>Databricks Jobs</b></div></div>
-      <div class="reason"><p>The Map state runs chains in parallel with retries per chain, and every run shows as a visual graph, which is good for a portfolio. Managed Airflow starts at hundreds of dollars a month. Durable functions could also do it, but they don't give the visual run graph. Databricks Jobs can't reach the chain sites.</p></div>
+      <div class="reason"><p>The Map state runs the 30 inputs in parallel with retries per item, and every run shows as a visual graph, which is good for a portfolio. An always-on managed Airflow environment starts above $200 a month. Durable functions could also do it, but they don't give the visual run graph. Databricks Jobs can't reach the chain sites.</p></div>
     </div>
     <div class="row">
       <div class="layer">Raw archive</div>
       <div><div class="pick">S3, versioned</div><div class="instead">Instead of <b>only the Databricks volume</b></div></div>
-      <div class="reason"><p>Databricks may delete a free account after long inactivity. S3 is the copy of record: every table can be rebuilt from it, and history that was missed can't be recollected later. It costs cents a month.</p></div>
+      <div class="reason"><p>Databricks may delete a free account after long inactivity. S3 is the copy of record, and Databricks reads it directly through a read-only external location, so raw is not copied. Every table can be rebuilt from it, and history that was missed can't be recollected later. It costs cents a month.</p></div>
     </div>
     <div class="row">
       <div class="layer">Sources</div>
@@ -418,7 +412,7 @@ a:focus-visible { outline: 2px solid var(--daily); outline-offset: 2px; }
     <div class="cost"><div class="n">$0</div><div class="l">Power BI Desktop</div></div>
     <div class="cost"><div class="n">$0</div><div class="l">Kaggle downloads</div></div>
   </div>
-  <p class="muted" style="margin-top:12px;font-size:14px">Uploads from S3 to Databricks count as AWS data transfer out. The first 100 GB a month are free, so the store sample should stay under that.</p>
+  <p class="muted" style="margin-top:12px;font-size:14px">Databricks runs in Ohio, so its reads from S3 count as AWS data transfer out. The first 100 GB a month are free, so normal daily reads should stay under that.</p>
 </section>
 
 <section>
