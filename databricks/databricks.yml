@@ -7,3 +7,12 @@ workspace:
 targets:
   dev:
     default: true
+
+resources:
+  jobs:
+    bronze_price_items:
+      name: bronze_price_items
+      tasks:
+        - task_key: load_keshet
+          notebook_task:
+            notebook_path: ./notebooks/bronze_price_items.py

@@ -61,6 +61,7 @@ External Delta table in `s3://supermarket-detective-raw-971422709739/bronze/pric
 | `collected_date` | DATE | Collection date, from the S3 folder |
 | `modified_at` | TIMESTAMP | When the file landed in S3 |
 | `declared_count` | STRING | `Count` attribute of `<Items>`; found only in Keshet's sample, otherwise NULL |
+| `tags_in_file` | INT | Number of `<Item>` tags counted in the decompressed file text; used for the per-file row check |
 | `header` | MAP<STRING, STRING> | The file's top-level fields, such as `StoreId` |
 | `fields` | MAP<STRING, STRING> | This product's fields, as published |
 | `loaded_at` | TIMESTAMP | When the row was loaded |
