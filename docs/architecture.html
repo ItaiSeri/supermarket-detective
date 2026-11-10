@@ -226,7 +226,7 @@ a:focus-visible { outline: 2px solid var(--daily); outline-offset: 2px; }
 
     <rect x="732" y="290" width="210" height="78" rx="6" class="box"/>
     <text x="744" y="314" class="bt">Silver</text>
-    <text x="744" y="334" class="bs">chain_config, real types</text>
+    <text x="744" y="334" class="bs">stores, daily prices, real types</text>
     <text x="744" y="352" class="bs">SCD2 price history</text>
 
     <rect x="732" y="160" width="210" height="78" rx="6" class="box"/>
@@ -310,7 +310,7 @@ a:focus-visible { outline: 2px solid var(--daily); outline-offset: 2px; }
     <tbody>
       <tr><th>When</th><td>Once, started by hand. Re-runnable for any missed date.</td><td>Every day at 09:00 Israel time.</td></tr>
       <tr><th>Source</th><td>Past Kaggle versions, one per day, 2024-09-22 to yesterday. <span class="mono">index.json</span> maps version number to date.</td><td>Chain sites for every chain (raw XML), including the 7 that block foreign traffic. Today's Kaggle file only if a chain's site fails.</td></tr>
-      <tr><th>Scope</th><td>Weekly snapshots back to 2024-09-22, daily for the last 60 days, daily around Hanukkah 2025 (Dec 14–22). Sampled stores only.</td><td>10 major chains, all branches. Price, promo and store files. Silver decides which stores to keep.</td></tr>
+      <tr><th>Scope</th><td>Weekly snapshots back to 2024-09-22, daily for the last 60 days, daily around Hanukkah 2025 (Dec 14–22). Sampled stores only.</td><td>10 major chains, all branches. Price, promo and store files. Silver keeps every store.</td></tr>
       <tr><th>Unit of work</th><td>One Lambda per date × chain, run in parallel by the Map state.</td><td>One Lambda run per chain + file type, 30 inputs to one function; a broken chain site fails and retries alone.</td></tr>
       <tr><th>Lands as</th><td><span class="mono">source=kaggle/date=…/chain=…/</span></td><td><span class="mono">source=scraper/…</span> or <span class="mono">source=kaggle/…</span></td></tr>
       <tr><th>Safe to re-run</th><td>Yes. The S3 key is fixed per date, chain and file, so a re-run overwrites; S3 versioning keeps the old copy.</td><td>Yes, for the same reason. Auto Loader only picks up files it hasn't seen.</td></tr>
@@ -423,7 +423,7 @@ a:focus-visible { outline: 2px solid var(--daily); outline-offset: 2px; }
   <div class="prove">
     <div class="card"><span class="tag tag-pass">Passed 11-03</span><h3>Do blocked chains accept AWS?</h3><p>Yes. A Lambda in Tel Aviv downloaded a store file from all 7 blocked chains, plus Shufersal and Rami Levy. Still to watch: whether that holds day after day.</p></div>
     <div class="card"><span class="tag">Untested</span><h3>Power BI to Free Edition</h3><p>Connect Power BI Desktop to the free SQL warehouse. If it can't, the gold tables are exported as Parquet files and Power BI reads those.</p></div>
-    <div class="card"><span class="tag">Untested</span><h3>The daily compute quota</h3><p>Run one full day of the store sample and watch the quota. If it's too close, cut stores before cutting chains.</p></div>
+    <div class="card"><span class="tag">Untested</span><h3>The daily compute quota</h3><p>Silver keeps every store, and its first load of 20 million rows took about a minute. Watch the quota once all layers run daily. If it's too close, cut stores before cutting chains.</p></div>
   </div>
 </section>
 

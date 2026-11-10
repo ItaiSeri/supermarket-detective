@@ -18,7 +18,7 @@ EventBridge Scheduler (daily 09:00)       External location supermarket_raw_scra
        -> Lambda fetch_chain (container)         v                                         dim_product, dim_store,
           a) il-supermarket-scraper:      BRONZE price_items: one row per product          dim_chain, dim_date
              raw XML, all branches,              (file, chain, all values as text)         pages: price index,
-             PriceFull/PromoFull/Stores          | field mapping (chain_config), types     Eilat check, fake promos,
+             PriceFull/PromoFull/Stores          | field names matched, real types         Eilat check, fake promos,
           b) or kagglehub: that day's            v                                         shrinkflation,
              Kaggle file (geo-blocked)    SILVER stores, items (barcode master),          pipeline health
           -> S3 raw bucket (versioned)           price_obs, price_history (SCD2),
@@ -42,10 +42,10 @@ One-off backfill: same Lambda, Map over
 - **S3 is the archive of record.** Raw files are kept forever in a versioned bucket; Databricks can be rebuilt from it.
 - **`date=` in the S3 path is the collection date, not the file's date.** A run also collects older files still listed on a chain's site, so silver takes each file's date from its name.
 - **Raw keeps files exactly as published; bronze keeps their values exactly as published.** Bronze has one row per product with every value as text, so it isn't a second copy of the same gzip bytes and it can be queried with SQL. Databricks' medallion guidance lists flattening under silver; it's done here on purpose, because the untouched files stay in raw. A parser bug never loses data: fix it and reload bronze from raw. Silver matches field names across chains and sets real types.
-- **One parser, driven by config.** A `chain_config` table maps each chain's layout to one schema. Adding a chain is a new row, not new code. Same idea as the partition-wise PL/SQL framework at Mizrahi.
+- **No config table for field names.** The 10 chains differ in only a few spellings (`ItemName` / `ItemNm`, `StoreID` / `StoreId`), so one `coalesce` per field handles them. A `chain_config` table was planned and dropped: it would be machinery with almost nothing to configure.
 - **Price history is SCD Type 2,** keyed on chain + store + barcode: a new row only when the price changes, with `valid_from` / `valid_to`. Daily full files make this the "source sends a full dump" CDC problem.
 - **Data quality at three levels:** file (expected chain/store/type arrived; row count within ±30% of the 7-day average), row (valid barcode, price > 0, parsable quantity; failures go to quarantine), business (price jump > 300% flagged).
-- **Stay under the daily compute quota:** sampled stores (every Eilat branch + about 3 central branches per chain + the online store), new files only, one pipeline.
+- **Stay under the daily compute quota:** each silver run reads only bronze rows it hasn't seen. Silver keeps all stores of the 10 chains: the first load of 20 million rows took about a minute and 328 MB. The Kaggle backfill stays sampled.
 - **Everything as code:** AWS resources in Terraform or CDK, Databricks pipelines and jobs in a bundle, all in GitHub with CI. Free Edition accounts can be deleted after long inactivity, so the repo must rebuild everything.
 
 ### Bronze table: `workspace.bronze.price_items`
@@ -107,6 +107,41 @@ Assumptions, not official definitions:
 - **The Eilat rule** (`City` or a ZIP starting with `88`) is ours. Its 13 stores match the count made separately from the chains' files.
 - **`city_code` looks like the Central Bureau of Statistics locality codes.** Only `2600` is confirmed, and there is no code-to-name lookup yet.
 
+### Silver table: `workspace.silver.price_obs`
+
+Managed Delta table, clustered by `file_date` and `chain`, built by `databricks/notebooks/silver_price_obs.py` (job `silver_load`, task `build_price_obs`, which runs after `build_stores`; not scheduled yet). One row per `chain` + `store_id` + `item_code` + `file_date`: what the chain published for that product on that day. It is an observation, not proof of the shelf price. Product names are not here; they go in `items`, so they aren't repeated about 7.4 million times a day.
+
+**Loading:** each run reads only bronze rows newer than the table's latest `bronze_loaded_at`, and saves them with `MERGE` on the key above. An existing row is replaced only by a later file from the same source, or by a scraper row replacing a Kaggle row. When one load has several candidates for a key, the scraper wins, then the latest file. To rebuild, drop the table and run the job.
+
+**Rejected, not stored here:** files that failed to parse; a chain ID that differs from the chain's ID in `silver.stores`; no file date, store ID or barcode; a price that isn't a positive number. Prices from stores missing from the Stores file are kept.
+
+| Column | Type | Meaning |
+|---|---|---|
+| `chain` | STRING | Chain, from the S3 folder |
+| `source` | STRING | `scraper` or `kaggle` |
+| `chain_id` | STRING | Chain ID published in the file |
+| `sub_chain_id` | STRING | Sub-chain ID published in the file |
+| `store_id` | STRING | Store ID without leading zeros; joins to `silver.stores` with `chain` |
+| `item_code` | STRING | Product code as published. Not always comparable across chains |
+| `item_type` | STRING | `ItemType` as published |
+| `price` | DECIMAL(10,2) | Regular price, always above 0 |
+| `unit_price` | DECIMAL(12,4) | `UnitOfMeasurePrice`; NULL if not a number |
+| `quantity` | DECIMAL(12,3) | Package size; NULL if not a number |
+| `unit_qty` | STRING | `UnitQty` as published |
+| `unit_of_measure` | STRING | `UnitOfMeasure` as published; spellings vary |
+| `qty_in_package` | DECIMAL(12,3) | `QtyInPackage`; NULL if not a number, as for "unknown" |
+| `is_weighted` | BOOLEAN | `bIsWeighted` is `1` |
+| `allow_discount` | BOOLEAN | `AllowDiscount` is `1` |
+| `price_updated_at` | TIMESTAMP | The chain's own last price update, as published (`PriceUpdateDate` or `PriceUpdateTime`) |
+| `file_date` | DATE | Date in the file name: the day the data represents |
+| `file_time` | STRING | Date and time in the file name, as 14 digits; picks the latest file |
+| `source_file` | STRING | Full S3 path of the file |
+| `collected_date` | DATE | Date of the S3 folder: when the file was collected |
+| `modified_at` | TIMESTAMP | When the file landed in S3 |
+| `bronze_loaded_at` | TIMESTAMP | When the row was loaded into bronze; the watermark for the next run |
+
+Checked 2026-11-10: of 24,784,723 bronze rows, 20,029,515 kept, 4,748,410 repeats dropped, 6,798 rejected (2,068 with a price of zero or less, 4,730 from one Carrefour file in Keshet's folder), which adds up to the bronze total. 971 chain + store pairs, 53 file dates, no repeated key. A second run inserted 0 rows and updated 0. 67 stores publish prices but aren't in `silver.stores` (Carrefour 55, Shufersal 9, Keshet 2, Yohananof 1); all 13 Eilat stores have prices.
+
 ## Stores files: what the data looks like
 
 Checked on the latest Stores file of each of the 10 chains, collected 2026-11-09. Bronze keeps these values as published; silver handles them.
@@ -161,7 +196,7 @@ Library notes from the test (il-supermarket-scraper 1.0.19): scraper classes tak
 
 - `ingestion/` - Lambda container (scraper + Kaggle pull + upload), backfill mode, tests
 - `infra/` - AWS resources as code (S3, ECR, Lambda, Step Functions, EventBridge schedule, IAM, alarms)
-- `databricks/` - bundle: pipeline (bronze/silver/gold), jobs, `chain_config`
+- `databricks/` - bundle: notebooks (bronze, silver) and jobs
 - `powerbi/` - .pbix and screenshots for X posts
 - `data/` - local scratch only (git-ignored)
 
@@ -171,7 +206,7 @@ Library notes from the test (il-supermarket-scraper 1.0.19): scraper classes tak
 |---|---|---|---|
 | 0 | Prove the risky parts | AWS Tel Aviv reaches every chain, Databricks accepts uploads, Power BI connects to the Free Edition warehouse | Done 2026-11-03 |
 | 1 | Daily collection in the cloud | Every morning at 09:00 AWS downloads all chains' files into S3, where Databricks can read them directly, with no laptop involved | ~2026-11-10 |
-| 2 | Bronze + silver | Raw files become clean tables (stores, products, prices) with SCD2 price history, quality checks, quarantine and ops tables; two chains first, then the rest via `chain_config` | ~2026-11-17 |
+| 2 | Bronze + silver | Raw files become clean tables (stores, products, prices) with SCD2 price history, quality checks, quarantine and ops tables, for all 10 chains | ~2026-11-17 |
 | 3 | History backfill | Kaggle snapshots (weekly back to 2024-09-22, daily for the last 60 days and around Hanukkah 2025) in the same S3 bucket under `source=kaggle/`, sampled stores only, through the same bronze/silver | ~2026-11-21 |
 | 4 | Gold + Power BI v1 | Price index and the Eilat VAT check; first X post | ~2026-11-28 |
 | 5 | Hanukkah index | Holiday prices 2026 vs. Hanukkah 2025 (2025-12-14 to 12-22) | before 2026-12-04 |
