@@ -142,9 +142,9 @@ Assumptions, not official definitions:
 
 Managed Delta table, clustered by `file_date` and `chain`, built by `databricks/notebooks/silver_price_obs.py` (job `silver_load`, task `build_price_obs`, which runs after `build_stores`; not scheduled yet). One row per `chain` + `store_id` + `item_code` + `file_date`: what the chain published for that product on that day. It is an observation, not proof of the shelf price. Product names are not here; they go in `items`, so they aren't repeated about 7.4 million times a day.
 
-**Loading:** each run reads only bronze rows newer than the table's latest `bronze_loaded_at`, and saves them with `MERGE` on the key above. An existing row is replaced only by a later file from the same source, or by a scraper row replacing a Kaggle row. When one load has several candidates for a key, the scraper wins, then the latest file. To rebuild, drop the table and run the job.
+**Loading:** each run reads only bronze rows newer than the table's latest `bronze_loaded_at`, and saves them with `MERGE` on the key above. An existing row is replaced only by a later file from the same source, or by a scraper row replacing a Kaggle row. When one load has several candidates for a key, the scraper wins, then the latest file. To rebuild, drop the table and run the job. If `quarantine` is empty, the run reads all of bronze to fill it, and rows already in `price_obs` don't change.
 
-**Rejected, not stored here:** files that failed to parse; a chain ID that differs from the chain's ID in `silver.stores`; no file date, store ID or barcode; a price that isn't a positive number. Prices from stores missing from the Stores file are kept.
+**Rejected rows go to `silver.quarantine`:** files that failed to parse; a chain ID that differs from the chain's ID in `silver.stores`; no file date, store ID or barcode; a price that isn't a positive number. The same notebook decides both outcomes, and saves rejects first, because saving prices moves the watermark. Prices from stores missing from the Stores file are kept.
 
 | Column | Type | Meaning |
 |---|---|---|
@@ -172,6 +172,62 @@ Managed Delta table, clustered by `file_date` and `chain`, built by `databricks/
 | `bronze_loaded_at` | TIMESTAMP | When the row was loaded into bronze; the watermark for the next run |
 
 Checked 2026-11-10: of 24,784,723 bronze rows, 20,029,515 kept, 4,748,410 repeats dropped, 6,798 rejected (2,068 with a price of zero or less, 4,730 from one Carrefour file in Keshet's folder), which adds up to the bronze total. 971 chain + store pairs, 53 file dates, no repeated key. A second run inserted 0 rows and updated 0. 67 stores publish prices but aren't in `silver.stores` (Carrefour 55, Shufersal 9, Keshet 2, Yohananof 1); all 13 Eilat stores have prices.
+
+### Silver table: `workspace.silver.quarantine`
+
+Managed Delta table, written by `silver_price_obs.py`. One row per rejected bronze row, so a file sitting under two `date=` folders appears twice. A re-run adds nothing, because `row_key` already exists.
+
+| Column | Type | Meaning |
+|---|---|---|
+| `row_key` | STRING | SHA-256 of the file path, the row's values and any parse error |
+| `reject_reason` | STRING | `file_not_readable`, `wrong_chain`, `no_file_date`, `no_store_id`, `no_item_code`, `price_not_a_number` or `price_zero_or_less` |
+| `chain` | STRING | Chain, from the S3 folder |
+| `source` | STRING | `scraper` or `kaggle` |
+| `chain_id` | STRING | Chain ID published in the file |
+| `store_id` | STRING | Store ID without leading zeros |
+| `item_code` | STRING | Product code as published |
+| `price_raw` | STRING | `ItemPrice` as published |
+| `parse_error` | STRING | Error text if the file couldn't be read |
+| `file_date` | DATE | Date in the file name |
+| `source_file` | STRING | Full S3 path of the file |
+| `collected_date` | DATE | Date of the S3 folder |
+| `modified_at` | TIMESTAMP | When the file landed in S3 |
+| `bronze_loaded_at` | TIMESTAMP | When the row was loaded into bronze |
+| `header` | MAP<STRING, STRING> | The file's top-level fields, as published |
+| `fields` | MAP<STRING, STRING> | This row's fields, as published |
+| `quarantined_at` | TIMESTAMP | When the row was saved here |
+
+Checked 2026-11-10: 6,798 rows (2,068 `price_zero_or_less`, 4,730 `wrong_chain`), which with kept rows and repeats adds up to bronze.
+
+### Silver table: `workspace.silver.dq_results`
+
+Managed Delta table, written by `databricks/notebooks/silver_dq.py` (job `silver_load`, task `build_dq`, which runs after `build_price_obs`). One row per check per run, appended. Each check is one query that returns one number: above `fail_above` is FAIL, above `warn_above` is WARNING, otherwise PASS. Results are saved first, then any FAIL stops the job.
+
+| Column | Type | Meaning |
+|---|---|---|
+| `run_at` | TIMESTAMP | When the run started; the same for all its checks |
+| `check_name` | STRING | Name of the check |
+| `check_level` | STRING | `row`, `file` or `business` |
+| `file_date` | DATE | The latest date in `price_obs` when the check ran |
+| `observed` | DOUBLE | The number the check returned |
+| `warn_above` | DOUBLE | WARNING above this; NULL if none |
+| `fail_above` | DOUBLE | FAIL above this; NULL if none |
+| `outcome` | STRING | `PASS`, `WARNING` or `FAIL` |
+| `meaning` | STRING | What the check looks for |
+
+| Check | Level | WARNING above | FAIL above | 2026-11-10 |
+|---|---|---|---|---|
+| `repeated_keys` | row | - | 0 | 0, PASS |
+| `bad_prices` | row | - | 0 | 0, PASS |
+| `missing_keys` | row | - | 0 | 0, PASS |
+| `reject_percent` | row | 0.1 | 5 | 0.006, PASS |
+| `files_not_readable` | file | 0 | - | 0, PASS |
+| `wrong_chain_rows` | file | 0 | - | 2,365, WARNING |
+| `stores_without_record` | business | 0 | - | 56, WARNING |
+| `eilat_stores_missing` | business | 0 | - | 0, PASS |
+| `price_jump_over_300pct` | business | 100 | - | 7, PASS |
+
+The limit of 100 on price jumps comes from one measured day and is provisional. The stop-on-FAIL path has not been seen in a real run yet. The file-level checks for expected stores and row counts come with the completeness work in S6.
 
 ## Stores files: what the data looks like
 
