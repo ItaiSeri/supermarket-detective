@@ -322,9 +322,9 @@ a:focus-visible { outline: 2px solid var(--daily); outline-offset: 2px; }
 <section class="col" style="max-width:none">
   <div class="col">
     <h2>How a daily full file becomes price history</h2>
-    <p>Every day each chain republishes its whole price list. Silver keeps a new row only when a price actually changes, with the dates it was valid. That's an SCD Type 2 table, and the same "source sends a full dump" problem as a nightly bank extract.</p>
+    <p>Every day each chain republishes its whole price list. Silver keeps a new row only when a tracked value changes (price, unit price, package size, flags), with the first and last day it was seen. A store's file that arrives without the product also ends a period; a day with no file doesn't. That's an SCD Type 2 table, and the same "source sends a full dump" problem as a nightly bank extract.</p>
   </div>
-  <div class="scd" role="img" aria-label="Five daily snapshot rows for one product collapse into three history rows: 7.10 from Nov 1 to Nov 2, 6.50 from Nov 3 to Nov 4, and 7.10 from Nov 5 onward.">
+  <div class="scd" role="img" aria-label="Five daily snapshot rows for one product collapse into three history rows: 7.10 first seen Nov 1, last seen Nov 2; 6.50 from Nov 3 to Nov 4; and 7.10 from Nov 5, still current.">
     <table class="mini">
       <caption>Daily snapshots (bronze → silver)</caption>
       <thead><tr><th>date</th><th>item</th><th class="num">price</th></tr></thead>
@@ -339,15 +339,15 @@ a:focus-visible { outline: 2px solid var(--daily); outline-offset: 2px; }
     <div class="arrow-mid" aria-hidden="true"><span>→</span>changes only</div>
     <table class="mini">
       <caption>price_history (SCD2)</caption>
-      <thead><tr><th>item</th><th class="num">price</th><th>valid_from</th><th>valid_to</th></tr></thead>
+      <thead><tr><th>item</th><th class="num">price</th><th>first_seen</th><th>last_seen</th></tr></thead>
       <tbody>
         <tr><td>milk 1L</td><td class="num">7.10</td><td>11-01</td><td>11-02</td></tr>
         <tr class="chg"><td>milk 1L</td><td class="num">6.50</td><td>11-03</td><td>11-04</td></tr>
-        <tr class="chg"><td>milk 1L</td><td class="num">7.10</td><td>11-05</td><td>open</td></tr>
+        <tr class="chg"><td>milk 1L</td><td class="num">7.10</td><td>11-05</td><td>11-05, current</td></tr>
       </tbody>
     </table>
   </div>
-  <p class="muted" style="margin-top:12px;font-size:14px">Illustrative numbers. The real key is chain + store + barcode. The "fake promotion" check compares a promo price with the history row in force 14 days before the promo started.</p>
+  <p class="muted" style="margin-top:12px;font-size:14px">Illustrative numbers. The real key is chain + store + barcode. Built 2026-11-10: 20.0M daily rows became 7.6M periods. The "fake promotion" check compares a promo price with the history row in force 14 days before the promo started.</p>
 </section>
 
 <section>

@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS workspace.silver.dq_results (
 P = "workspace.silver.price_obs"
 Q = "workspace.silver.quarantine"
 S = "workspace.silver.stores"
+H = "workspace.silver.price_history"
 
 latest = spark.sql(f"SELECT max(file_date) AS d FROM {P}").first()["d"]
 previous = spark.sql(f"SELECT max(file_date) AS d FROM {P} WHERE file_date < DATE'{latest}'").first()["d"]
@@ -55,6 +56,12 @@ checks = [
     ("price_jump_over_300pct", "business",
      f"SELECT count_if(n.price > o.price * 4) FROM (SELECT chain, store_id, item_code, price FROM {P} WHERE file_date = DATE'{latest}') n JOIN (SELECT chain, store_id, item_code, price FROM {P} WHERE file_date = DATE'{previous}') o ON n.chain = o.chain AND n.store_id = o.store_id AND n.item_code = o.item_code",
      100, None, "Products whose price more than quadrupled since the previous day"),
+    ("history_days_mismatch", "row",
+     f"SELECT abs((SELECT coalesce(sum(days_observed), 0) FROM {H}) - (SELECT count(*) FROM {P}))",
+     None, 0, "Days covered by price_history differ from rows in price_obs"),
+    ("history_overlapping_periods", "row",
+     f"SELECT count_if(first_seen <= prev_last) FROM (SELECT first_seen, lag(last_seen) OVER (PARTITION BY chain, store_id, item_code ORDER BY first_seen) AS prev_last FROM {H})",
+     None, 0, "Two periods of the same product at a store overlap"),
 ]
 
 # COMMAND ----------

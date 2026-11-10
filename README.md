@@ -43,7 +43,7 @@ One-off backfill: same Lambda, Map over
 - **`date=` in the S3 path is the collection date, not the file's date.** A run also collects older files still listed on a chain's site, so silver takes each file's date from its name.
 - **Raw keeps files exactly as published; bronze keeps their values exactly as published.** Bronze has one row per product with every value as text, so it isn't a second copy of the same gzip bytes and it can be queried with SQL. Databricks' medallion guidance lists flattening under silver; it's done here on purpose, because the untouched files stay in raw. A parser bug never loses data: fix it and reload bronze from raw. Silver matches field names across chains and sets real types.
 - **No config table for field names.** The 10 chains differ in only a few spellings (`ItemName` / `ItemNm`, `StoreID` / `StoreId`), so one `coalesce` per field handles them. A `chain_config` table was planned and dropped: it would be machinery with almost nothing to configure.
-- **Price history is SCD Type 2,** keyed on chain + store + barcode: a new row only when the price changes, with `valid_from` / `valid_to`. Daily full files make this the "source sends a full dump" CDC problem.
+- **Price history is SCD Type 2,** keyed on chain + store + barcode: a new row when any tracked value changes, or when the product comes back after a file that arrived without it, with `first_seen` / `last_seen`. A missing file is not a missing product. Daily full files make this the "source sends a full dump" CDC problem.
 - **Data quality at three levels:** file (expected chain/store/type arrived; row count within ±30% of the 7-day average), row (valid barcode, price > 0, parsable quantity; failures go to quarantine), business (price jump > 300% flagged).
 - **Stay under the daily compute quota:** each silver run reads only bronze rows it hasn't seen. Silver keeps all stores of the 10 chains: the first load of 20 million rows took about a minute and 328 MB. The Kaggle backfill stays sampled.
 - **Everything as code:** AWS resources in Terraform or CDK, Databricks pipelines and jobs in a bundle, all in GitHub with CI. Free Edition accounts can be deleted after long inactivity, so the repo must rebuild everything.
@@ -252,9 +252,40 @@ Other promotion fields, such as `Remarks` and `PromotionDays`, stay in bronze.
 
 Checked 2026-11-10: of 35,694,531 bronze rows, 31,261,575 kept, 4,432,950 repeats dropped, 6 rejected (2 files with no promotions, 4 negative prices), which adds up to the bronze total. No repeated key. 10 chains, 981 chain + store pairs, 44 file dates, of which 3 are full days; the others come from old files still listed on the sites. A full day is about 11.5 million rows, and the table is 481 MB. The first load took under 3 minutes; a second run read 0 rows and inserted 0. 14 stores publish promotions but aren't in `silver.stores` (Shufersal 13, Keshet 1). 104 rows had already expired on their file date. `silver_dq` has no promotion checks yet.
 
+### Silver table: `workspace.silver.price_history`
+
+Managed Delta table, clustered by `chain`, `store_id` and `item_code`, built by `databricks/notebooks/silver_price_history.py` (job `silver_load`, task `build_price_history`, which runs after `build_price_obs`; not scheduled yet). SCD Type 2: one row per period in which a product at a store kept the same values. This is the long-term price table.
+
+**When a new period starts** (`start_reason`):
+- `first_seen`: the product's first file at this store.
+- `returned`: a file of this store arrived without the product, and a later one has it again. The store's days with a file are numbered in order (`dense_rank`), so a day with no file at all leaves no gap and doesn't split a period.
+- `value_changed`: any tracked value differs from the previous day it was seen: price, unit price, quantity, unit quantity, unit of measure, quantity in package, weighed, allow discount or item type. The comparison treats two NULLs as equal.
+
+**Loading:** rebuilt in full from `price_obs` on each run (`CREATE OR REPLACE`), so late or backfilled files need no special handling. This works only while `price_obs` keeps every day. When `price_obs` is trimmed to about 90 days after the Kaggle backfill, this table must switch to an incremental `MERGE`.
+
+| Column | Type | Meaning |
+|---|---|---|
+| `chain` | STRING | Chain |
+| `store_id` | STRING | Store ID without leading zeros; joins to `silver.stores` with `chain` |
+| `item_code` | STRING | Product code as published |
+| `period_no` | BIGINT | 1, 2, 3… per chain + store + product; with those, the key |
+| `item_type` | STRING | `ItemType` during the period |
+| `price` | DECIMAL(10,2) | Shelf price during the period |
+| `unit_price` | DECIMAL(12,4) | Price per unit of measure during the period |
+| `quantity`, `unit_qty`, `unit_of_measure`, `qty_in_package` | as in `price_obs` | Package values during the period |
+| `is_weighted`, `allow_discount` | BOOLEAN | Flags during the period |
+| `first_seen` | DATE | First file date in the period |
+| `last_seen` | DATE | Last file date in the period |
+| `days_observed` | BIGINT | Files of this store that had the product in the period |
+| `start_reason` | STRING | `first_seen`, `returned` or `value_changed` |
+| `is_current` | BOOLEAN | The period includes the store's latest file |
+| `first_source_file`, `last_source_file` | STRING | S3 paths of the first and last file of the period |
+
+Checked 2026-11-10: 20,029,515 `price_obs` rows became 7,643,904 periods (7,521,408 first seen, 119,555 value changed, 2,941 returned), 7,489,021 of them current, 74 MB, built in 38 s. The ratio is low because only a few full days exist and every product needs a first row. 23,621 of the value changes kept the same price, mostly `allow_discount` flips (20,259), so analyses of price changes should compare `price`, not count periods.
+
 ### Silver table: `workspace.silver.dq_results`
 
-Managed Delta table, written by `databricks/notebooks/silver_dq.py` (job `silver_load`, task `build_dq`, which runs after `build_price_obs`). One row per check per run, appended. Each check is one query that returns one number: above `fail_above` is FAIL, above `warn_above` is WARNING, otherwise PASS. Results are saved first, then any FAIL stops the job.
+Managed Delta table, written by `databricks/notebooks/silver_dq.py` (job `silver_load`, task `build_dq`, which runs after `build_price_obs` and `build_price_history`). One row per check per run, appended. Each check is one query that returns one number: above `fail_above` is FAIL, above `warn_above` is WARNING, otherwise PASS. Results are saved first, then any FAIL stops the job.
 
 | Column | Type | Meaning |
 |---|---|---|
@@ -279,6 +310,8 @@ Managed Delta table, written by `databricks/notebooks/silver_dq.py` (job `silver
 | `stores_without_record` | business | 0 | - | 56, WARNING |
 | `eilat_stores_missing` | business | 0 | - | 0, PASS |
 | `price_jump_over_300pct` | business | 100 | - | 7, PASS |
+| `history_days_mismatch` | row | - | 0 | 0, PASS |
+| `history_overlapping_periods` | row | - | 0 | 0, PASS |
 
 The limit of 100 on price jumps comes from one measured day and is provisional. The stop-on-FAIL path has not been seen in a real run yet. The file-level checks for expected stores and row counts come with the completeness work in S6.
 
