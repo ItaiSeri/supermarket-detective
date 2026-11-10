@@ -77,6 +77,36 @@ External Delta table in `s3://supermarket-detective-raw-971422709739/bronze/stor
 | `header` | MAP<STRING, STRING> | Everything above the `Store` tag: the file's top-level fields and the sub-chain (`SubChainID` or `SubChainId`, by chain) |
 | `fields` | MAP<STRING, STRING> | This store's fields, as published |
 
+### Silver table: `workspace.silver.stores`
+
+Managed Delta table, rebuilt in full on each run by `databricks/notebooks/silver_stores.py` (job `silver_load`, not scheduled yet). One row per `chain` + `store_id`: the store's newest version in `bronze.stores`, by the date in the file name and then `modified_at`. Older versions of a store aren't kept here; they stay in bronze.
+
+| Column | Type | Meaning |
+|---|---|---|
+| `chain` | STRING | Chain, from the S3 folder |
+| `chain_id` | STRING | Chain ID published in the file |
+| `sub_chain_id` | STRING | Sub-chain ID published in the file |
+| `store_id` | STRING | Store ID without leading zeros, so it matches price files (`001` = `1`) |
+| `store_id_raw` | STRING | Store ID as published |
+| `store_name` | STRING | Store name as published |
+| `address` | STRING | Address as published |
+| `city_code` | INT | `City` when it is a non-zero number, otherwise NULL |
+| `city_name` | STRING | `City` when it is Hebrew text, otherwise NULL |
+| `zip_code` | STRING | ZIP as published; NULL if empty or all zeros |
+| `store_type` | STRING | `StoreType` as published |
+| `is_physical` | BOOLEAN | `store_type` is `1`; never NULL |
+| `is_eilat` | BOOLEAN | Physical store in Eilat, by the Eilat rule below; never NULL |
+| `last_file_date` | DATE | Date of the file this row came from |
+| `source_file` | STRING | Full S3 path of that file |
+
+Checked 2026-11-10: 974 stores, 945 physical, 13 in Eilat, no repeated key. The key needs no sub-chain: adding `sub_chain_id` changes no store count in any of the 10 chains, and no store ID appears twice in a file. 88 stores have neither a city code nor a city name, mostly Yohananof and Keshet.
+
+Assumptions, not official definitions:
+
+- **`StoreType` 1 means a physical store.** It excludes every online store found so far, but the codes' official meaning isn't confirmed.
+- **The Eilat rule** (`City` or a ZIP starting with `88`) is ours. Its 13 stores match the count made separately from the chains' files.
+- **`city_code` looks like the Central Bureau of Statistics locality codes.** Only `2600` is confirmed, and there is no code-to-name lookup yet.
+
 ## Stores files: what the data looks like
 
 Checked on the latest Stores file of each of the 10 chains, collected 2026-11-09. Bronze keeps these values as published; silver handles them.
@@ -91,7 +121,7 @@ Checked on the latest Stores file of each of the 10 chains, collected 2026-11-09
 - **Eilat rule:** `City` is `2600` or `אילת`, or the ZIP starts with `88`, and the store is physical. Don't search for the word `אילת` in names or addresses: it matches streets and stores in other cities.
 - **Eilat stores:** 13 physical stores in 4 chains (Shufersal 7, Carrefour 3, Mahsani Ashuk 2, Rami Levy 1). One Carrefour Eilat store has a wrong ZIP (`4333345`), so the ZIP alone isn't enough. Mahsani Ashuk's `96 אינטרנט אילת` is online and is excluded.
 - **No Eilat branch at Keshet or Yohananof:** confirmed against each chain's own branch list on 2026-11-10 (Keshet 19 branches + 2 robotic delivery centres, Yohananof 47 branches).
-- **Not physical stores:** online stores at Mahsani Ashuk (96, 97), Victory (97) and Hazi Hinam (103), and probably Keshet's `ממ"ר` stores (116, 120), which look like delivery centres. Silver needs an "is physical store" flag.
+- **Not physical stores:** online stores at Mahsani Ashuk (96, 97), Victory (97) and Hazi Hinam (103), and probably Keshet's `ממ"ר` stores (116, 120), which look like delivery centres. `silver.stores` marks these with `is_physical`.
 - **In the feed but not on the chain's branch list:** Yohananof 002 (`יוחננוף ישן`) and Keshet 010 (`גבעת רם`); check in silver whether they still publish prices. Yohananof 146, 150 and 152 are pickup points.
 - **Format:** every chain uses a `Store` tag, at different depths (Keshet: `Root/SubChains/SubChain/Stores/Store`). Six chains are UTF-16. Shufersal's root tag is `Chain`. Hazi Hinam's files are named `StoresFull...gz.xml.gz` but are gzipped only once.
 
