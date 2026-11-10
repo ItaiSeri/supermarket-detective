@@ -22,7 +22,7 @@ EventBridge Scheduler (daily 09:00)       External location supermarket_raw_scra
           b) or kagglehub: that day's            v                                         shrinkflation,
              Kaggle file (geo-blocked)    SILVER stores, items (barcode master),          pipeline health
           -> S3 raw bucket (versioned)           price_obs, price_history (SCD2),
-          -> manifest row                        promotions + promo_items, quarantine
+          -> manifest row                        promotion_obs, quarantine
   -> on a failed run: EventBridge rule           |
      -> SNS topic -> email                       v
                                           GOLD   price_index_daily (fixed basket), eilat_vs_center,
@@ -106,7 +106,7 @@ Promotion files come in two layouts, sometimes within one chain. Bronze keeps bo
 | `item` | MAP<STRING, STRING> | This product's fields, as published |
 | `loaded_at` | TIMESTAMP | When the row was loaded |
 
-Checked 2026-11-10: all 3,156 promotion files in S3 are loaded, 35,694,531 rows and 5,000,651 promotions, from all 10 chains. No file failed to parse, and every file's product rows and promotions match its tag counts. Two promotions have no products. The load took about 12 minutes.
+Checked 2026-11-10: all 3,156 promotion files in S3 are loaded, 35,694,531 rows and 5,000,651 promotions, from all 10 chains. No file failed to parse, and every file's product rows and promotions match its tag counts. Two files contain no promotions, so each is one row with NULL `promotion`. The load took about 12 minutes.
 
 ### Silver table: `workspace.silver.stores`
 
@@ -198,6 +198,59 @@ Managed Delta table, written by `silver_price_obs.py`. One row per rejected bron
 | `quarantined_at` | TIMESTAMP | When the row was saved here |
 
 Checked 2026-11-10: 6,798 rows (2,068 `price_zero_or_less`, 4,730 `wrong_chain`), which with kept rows and repeats adds up to bronze.
+
+### Silver table: `workspace.silver.promotion_obs`
+
+Managed Delta table, clustered by `file_date` and `chain`, built by `databricks/notebooks/silver_promotion_obs.py` (job `silver_load`, task `build_promotion_obs`, which runs after `build_stores`; not scheduled yet). One row per `chain` + `store_id` + `promotion_id` + `group_id` + `item_code` + `file_date`: what the chain published about that product in that promotion on that day. It is an observation, and it says nothing about whether the deal is really cheaper; gold answers that by comparing with `price_obs`.
+
+**Loading:** the same as `price_obs`: only bronze rows newer than the table's latest `bronze_loaded_at`, saved with `MERGE` on the key above. An existing row is replaced only by a later file from the same source, or by a scraper row replacing a Kaggle row. To rebuild, drop the table and run the job.
+
+**Matching the two layouts:** `promotion_id` loses its leading zeros, because Keshet publishes the same promotion as `1145634` in one layout and `0001145634` in the other. The flat layout has no groups, so its `group_id` is `1`. Reward type, quantities, price and discount come from the product in the Groups layout and from the promotion in the flat layout.
+
+**Repeats inside one file:** a product can appear twice in the same group of a promotion, usually once at 0.00 and once at its real price (Shufersal, 183,548 of its 183,652 repeats). The row with a positive price is kept. If both are positive, the lower price is kept (98 cases). The official meaning of these pairs isn't confirmed.
+
+**Rejected, stored in `silver.promotion_quarantine`:** a file that failed to parse, a file with no promotions, a chain ID that differs from the chain's ID in `silver.stores`, no file date, store ID, promotion ID or barcode, or a negative price. It has the columns of `silver.quarantine` plus `promotion_id`, with `promotion` and `item` in place of `fields`, and it is separate because the price checks in `silver_dq` count the rows of `silver.quarantine`. A price of 0 or a missing price isn't rejected: many promotions give only a discount percent or a gift.
+
+| Column | Type | Meaning |
+|---|---|---|
+| `chain` | STRING | Chain, from the S3 folder |
+| `source` | STRING | `scraper` or `kaggle` |
+| `chain_id` | STRING | Chain ID published in the file |
+| `sub_chain_id` | STRING | Sub-chain ID published in the file |
+| `store_id` | STRING | Store ID without leading zeros; joins to `silver.stores` with `chain` |
+| `promotion_id` | STRING | Promotion ID without leading zeros; unique only within a chain |
+| `group_id` | STRING | `GroupID`, or `1` in the flat layout |
+| `item_code` | STRING | Product code as published; joins to `price_obs` with `chain` and `store_id` |
+| `item_type` | STRING | `ItemType` as published |
+| `layout` | STRING | `groups` or `flat` |
+| `description` | STRING | Promotion text as published |
+| `start_at` | TIMESTAMP | Start of the promotion; from one field, or from date + hour in the flat layout |
+| `end_at` | TIMESTAMP | End of the promotion, built the same way |
+| `promotion_updated_at` | TIMESTAMP | The chain's own last update of the promotion |
+| `reward_type` | STRING | `RewardType` as published; official meaning of the codes not confirmed |
+| `min_qty` | DECIMAL(12,3) | Quantity needed for the deal; NULL if not a number |
+| `max_qty` | DECIMAL(12,3) | Maximum quantity; NULL if not a number or not set |
+| `discounted_price` | DECIMAL(12,2) | Deal price as published, usually for `min_qty` units together, not per unit. 0 doesn't mean free |
+| `discounted_price_per_unit` | DECIMAL(14,4) | `DiscountedPricePerMida`; unreliable in some chains (3 for 14 shows 14) |
+| `discount_rate` | DECIMAL(12,4) | Discount percent as published |
+| `discount_type` | STRING | `DiscountType` as published |
+| `min_purchase_amount` | DECIMAL(12,2) | Minimum purchase; NULL if not a number or not set |
+| `is_weighted` | BOOLEAN | `bIsWeighted`, or `IsWeightedPromo` in the flat layout, is `1` |
+| `is_gift_item` | BOOLEAN | The product's `IsGiftItem` is `1`; NULL in the Groups layout, whose promotion-level flag holds values like 3 or 8 |
+| `allow_multiple_discounts` | BOOLEAN | `AllowMultipleDiscounts` is `1` |
+| `is_coupon` | BOOLEAN | `AdditionalIsCoupon` is `1` |
+| `club_code` | STRING | First number in the club field. `0` looks like "all customers", but it isn't official, and Carrefour lists named clubs under `0` |
+| `club_raw` | STRING | Club field as published |
+| `file_date` | DATE | Date in the file name: the day the data represents |
+| `file_time` | STRING | Date and time in the file name, as 14 digits; picks the latest file |
+| `source_file` | STRING | Full S3 path of the file |
+| `collected_date` | DATE | Date of the S3 folder: when the file was collected |
+| `modified_at` | TIMESTAMP | When the file landed in S3 |
+| `bronze_loaded_at` | TIMESTAMP | When the row was loaded into bronze; the watermark for the next run |
+
+Other promotion fields, such as `Remarks` and `PromotionDays`, stay in bronze.
+
+Checked 2026-11-10: of 35,694,531 bronze rows, 31,261,575 kept, 4,432,950 repeats dropped, 6 rejected (2 files with no promotions, 4 negative prices), which adds up to the bronze total. No repeated key. 10 chains, 981 chain + store pairs, 44 file dates, of which 3 are full days; the others come from old files still listed on the sites. A full day is about 11.5 million rows, and the table is 481 MB. The first load took under 3 minutes; a second run read 0 rows and inserted 0. 14 stores publish promotions but aren't in `silver.stores` (Shufersal 13, Keshet 1). 104 rows had already expired on their file date. `silver_dq` has no promotion checks yet.
 
 ### Silver table: `workspace.silver.dq_results`
 
