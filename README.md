@@ -50,7 +50,7 @@ One-off backfill: same Lambda, Map over
 
 ### Bronze table: `workspace.bronze.price_items`
 
-External Delta table in `s3://supermarket-detective-raw-971422709739/bronze/price_items`, created by `databricks/notebooks/bronze_price_items.py`. One row per product in a PriceFull file, for all 10 chains. Loaded by Auto Loader in batches of 100 files, split into 20 partitions so that only about 5 files' parsed products sit in Python's memory at once. Job `bronze_load` runs this and the stores load. Promotions are not in bronze yet; they wait until after Power BI v1. The same file can sit under several `date=` folders, so per-file checks group by `file_path`, and silver removes the repeats.
+External Delta table in `s3://supermarket-detective-raw-971422709739/bronze/price_items`, created by `databricks/notebooks/bronze_price_items.py`. One row per product in a PriceFull file, for all 10 chains. Loaded by Auto Loader in batches of 100 files, split into 20 partitions so that only about 5 files' parsed products sit in Python's memory at once. Job `bronze_load` runs this, the stores load and the promotions load. The same file can sit under several `date=` folders, so per-file checks group by `file_path`, and silver removes the repeats.
 
 | Column | Type | Meaning |
 |---|---|---|
@@ -76,6 +76,37 @@ External Delta table in `s3://supermarket-detective-raw-971422709739/bronze/stor
 | `tags_in_file` | INT | Number of `<Store>` tags in the decompressed file text |
 | `header` | MAP<STRING, STRING> | Everything above the `Store` tag: the file's top-level fields and the sub-chain (`SubChainID` or `SubChainId`, by chain) |
 | `fields` | MAP<STRING, STRING> | This store's fields, as published |
+
+### Bronze table: `workspace.bronze.promotion_items`
+
+External Delta table in `s3://supermarket-detective-raw-971422709739/bronze/promotion_items`, created by `databricks/notebooks/bronze_promotion_items.py` (job `bronze_load`, task `load_promotions`). One row per product in a promotion in a PromoFull file, for all 10 chains. A promotion with no products, or a file with no promotions, stays as one row with NULL `item`. Loaded by Auto Loader in the same batches as `price_items`.
+
+Promotion files come in two layouts, sometimes within one chain. Bronze keeps both as published, and silver matches them:
+
+| Layout | Path to the product | Where the discount is |
+|---|---|---|
+| Groups | `Promotions/Promotion/Groups/Group/PromotionItems/PromotionItem` | On each product; `item` also holds the group's fields, such as `GroupID` |
+| Flat | `Promotions/Promotion/PromotionItems/Item` | On the promotion; `item` holds only the code, type and gift flag |
+
+| Column | Type | Meaning |
+|---|---|---|
+| `file_path` | STRING | Full S3 path of the source file |
+| `file_name` | STRING | File name; silver takes the file's date from it |
+| `source` | STRING | `scraper` or `kaggle` |
+| `chain` | STRING | Chain, from the S3 folder |
+| `collected_date` | DATE | Collection date, from the S3 folder |
+| `modified_at` | TIMESTAMP | When the file landed in S3 |
+| `declared_count` | STRING | `Count` attribute of `<Promotions>`, when there is one |
+| `promotions_in_file` | INT | Number of `<Promotion>` tags in the decompressed file text |
+| `items_in_file` | INT | Number of `<PromotionItem>` and `<Item>` tags in the decompressed file text |
+| `parse_error` | STRING | NULL normally. If the file can't be read, the error text, in one row with NULL `promotion` and `item` |
+| `header` | MAP<STRING, STRING> | The file's top-level fields, such as `StoreId` |
+| `promotion_seq` | INT | The promotion's position in the file, from 1; with `file_path` it identifies one promotion |
+| `promotion` | MAP<STRING, STRING> | The promotion's fields at any depth, except its products. A tag that repeats keeps its values joined by `\|` |
+| `item` | MAP<STRING, STRING> | This product's fields, as published |
+| `loaded_at` | TIMESTAMP | When the row was loaded |
+
+Checked 2026-11-10: all 3,156 promotion files in S3 are loaded, 35,694,531 rows and 5,000,651 promotions, from all 10 chains. No file failed to parse, and every file's product rows and promotions match its tag counts. Two promotions have no products. The load took about 12 minutes.
 
 ### Silver table: `workspace.silver.stores`
 

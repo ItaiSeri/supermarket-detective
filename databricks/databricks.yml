@@ -19,6 +19,9 @@ resources:
         - task_key: load_stores
           notebook_task:
             notebook_path: ./notebooks/bronze_stores.py
+        - task_key: load_promotions
+          notebook_task:
+            notebook_path: ./notebooks/bronze_promotion_items.py
     silver_load:
       name: silver_load
       tasks:
