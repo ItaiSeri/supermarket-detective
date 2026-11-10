@@ -50,7 +50,7 @@ One-off backfill: same Lambda, Map over
 
 ### Bronze table: `workspace.bronze.price_items`
 
-External Delta table in `s3://supermarket-detective-raw-971422709739/bronze/price_items`, created by `databricks/notebooks/bronze_price_items.py`. One row per product in a PriceFull file. Stores and promotions get their own bronze tables later, because their shapes differ.
+External Delta table in `s3://supermarket-detective-raw-971422709739/bronze/price_items`, created by `databricks/notebooks/bronze_price_items.py`. One row per product in a PriceFull file, for all 10 chains. Loaded by Auto Loader in batches of 100 files, split into 20 partitions so that only about 5 files' parsed products sit in Python's memory at once. Job `bronze_load` runs this and the stores load. Promotions are not in bronze yet; they wait until after Power BI v1. The same file can sit under several `date=` folders, so per-file checks group by `file_path`, and silver removes the repeats.
 
 | Column | Type | Meaning |
 |---|---|---|
@@ -61,10 +61,39 @@ External Delta table in `s3://supermarket-detective-raw-971422709739/bronze/pric
 | `collected_date` | DATE | Collection date, from the S3 folder |
 | `modified_at` | TIMESTAMP | When the file landed in S3 |
 | `declared_count` | STRING | `Count` attribute of `<Items>`; found only in Keshet's sample, otherwise NULL |
-| `tags_in_file` | INT | Number of `<Item>` tags counted in the decompressed file text; used for the per-file row check |
+| `tags_in_file` | INT | Number of `<Item>` tags counted in the decompressed file text; used for the per-file row check; counted after converting UTF-16 files to UTF-8 |
+| `parse_error` | STRING | NULL normally. If the file can't be read, the error text, in one row with NULL `fields` |
 | `header` | MAP<STRING, STRING> | The file's top-level fields, such as `StoreId` |
 | `fields` | MAP<STRING, STRING> | This product's fields, as published |
 | `loaded_at` | TIMESTAMP | When the row was loaded |
+
+### Bronze table: `workspace.bronze.stores`
+
+External Delta table in `s3://supermarket-detective-raw-971422709739/bronze/stores`, created by `databricks/notebooks/bronze_stores.py`. One row per store in a Stores or StoresFull file. It has the same columns as `price_items` without `declared_count`, with these differences in meaning:
+
+| Column | Type | Meaning |
+|---|---|---|
+| `tags_in_file` | INT | Number of `<Store>` tags in the decompressed file text |
+| `header` | MAP<STRING, STRING> | Everything above the `Store` tag: the file's top-level fields and the sub-chain (`SubChainID` or `SubChainId`, by chain) |
+| `fields` | MAP<STRING, STRING> | This store's fields, as published |
+
+## Stores files: what the data looks like
+
+Checked on the latest Stores file of each of the 10 chains, collected 2026-11-09. Bronze keeps these values as published; silver handles them.
+
+| `City` holds | Chains | Silver rule |
+|---|---|---|
+| Numeric code (`2600` = Eilat) | Shufersal, Rami Levy, Carrefour, Osher Ad, Tiv Taam, Hazi Hinam | Look up the code; the numbers look like the Central Bureau of Statistics locality codes (only `2600` confirmed so far) |
+| City name in Hebrew | Victory, Mahsani Ashuk | Use as is |
+| `0` | Yohananof (51 of 51), Keshet (26 of 28), Rami Levy (3) | Use another column, see below |
+
+- **ZIP code:** usable for Keshet, but all Yohananof ZIPs are `0000000` or empty. Yohananof's city can come only from the store name or a hand-made store-to-city table.
+- **Eilat rule:** `City` is `2600` or `אילת`, or the ZIP starts with `88`, and the store is physical. Don't search for the word `אילת` in names or addresses: it matches streets and stores in other cities.
+- **Eilat stores:** 13 physical stores in 4 chains (Shufersal 7, Carrefour 3, Mahsani Ashuk 2, Rami Levy 1). One Carrefour Eilat store has a wrong ZIP (`4333345`), so the ZIP alone isn't enough. Mahsani Ashuk's `96 אינטרנט אילת` is online and is excluded.
+- **No Eilat branch at Keshet or Yohananof:** confirmed against each chain's own branch list on 2026-11-10 (Keshet 19 branches + 2 robotic delivery centres, Yohananof 47 branches).
+- **Not physical stores:** online stores at Mahsani Ashuk (96, 97), Victory (97) and Hazi Hinam (103), and probably Keshet's `ממ"ר` stores (116, 120), which look like delivery centres. Silver needs an "is physical store" flag.
+- **In the feed but not on the chain's branch list:** Yohananof 002 (`יוחננוף ישן`) and Keshet 010 (`גבעת רם`); check in silver whether they still publish prices. Yohananof 146, 150 and 152 are pickup points.
+- **Format:** every chain uses a `Store` tag, at different depths (Keshet: `Root/SubChains/SubChain/Stores/Store`). Six chains are UTF-16. Shufersal's root tag is `Chain`. Hazi Hinam's files are named `StoresFull...gz.xml.gz` but are gzipped only once.
 
 ## The Kaggle dataset
 

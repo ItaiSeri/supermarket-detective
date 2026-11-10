@@ -10,9 +10,12 @@ targets:
 
 resources:
   jobs:
-    bronze_price_items:
-      name: bronze_price_items
+    bronze_load:
+      name: bronze_load
       tasks:
-        - task_key: load_keshet
+        - task_key: load_prices
           notebook_task:
             notebook_path: ./notebooks/bronze_price_items.py
+        - task_key: load_stores
+          notebook_task:
+            notebook_path: ./notebooks/bronze_stores.py
