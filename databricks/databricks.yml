@@ -30,3 +30,8 @@ resources:
             - task_key: build_stores
           notebook_task:
             notebook_path: ./notebooks/silver_price_obs.py
+        - task_key: build_dq
+          depends_on:
+            - task_key: build_price_obs
+          notebook_task:
+            notebook_path: ./notebooks/silver_dq.py

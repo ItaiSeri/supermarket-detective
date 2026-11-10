@@ -1,4 +1,6 @@
 # Databricks notebook source
+from datetime import datetime
+
 spark.sql("""
 CREATE TABLE IF NOT EXISTS workspace.silver.price_obs (
   chain STRING,
@@ -27,6 +29,28 @@ CREATE TABLE IF NOT EXISTS workspace.silver.price_obs (
 CLUSTER BY (file_date, chain)
 """)
 
+spark.sql("""
+CREATE TABLE IF NOT EXISTS workspace.silver.quarantine (
+  row_key STRING,
+  reject_reason STRING,
+  chain STRING,
+  source STRING,
+  chain_id STRING,
+  store_id STRING,
+  item_code STRING,
+  price_raw STRING,
+  parse_error STRING,
+  file_date DATE,
+  source_file STRING,
+  collected_date DATE,
+  modified_at TIMESTAMP,
+  bronze_loaded_at TIMESTAMP,
+  header MAP<STRING, STRING>,
+  fields MAP<STRING, STRING>,
+  quarantined_at TIMESTAMP
+)
+""")
+
 # COMMAND ----------
 
 last_load = spark.sql("""
@@ -34,11 +58,16 @@ SELECT coalesce(max(bronze_loaded_at), TIMESTAMP'1900-01-01') AS t
 FROM workspace.silver.price_obs
 """).first()["t"]
 
+# An empty quarantine is filled from all of bronze, even if prices are already loaded.
+# The price MERGE changes nothing for rows it has already seen.
+if spark.table("workspace.silver.quarantine").limit(1).count() == 0:
+    last_load = datetime(1900, 1, 1)
+
 print("Reading bronze rows loaded after", last_load)
 
 # COMMAND ----------
 
-new_obs = spark.sql("""
+classified = spark.sql("""
 WITH expected AS (
   SELECT chain, min(chain_id) AS expected_chain_id
   FROM workspace.silver.stores
@@ -69,32 +98,61 @@ base AS (
     b.modified_at,
     b.loaded_at AS bronze_loaded_at,
     b.parse_error,
+    b.header,
+    b.fields,
+    b.fields['ItemPrice'] AS price_raw,
     e.expected_chain_id
   FROM workspace.bronze.price_items b
   LEFT JOIN expected e ON b.chain = e.chain
   WHERE b.loaded_at > :last_load
 )
-SELECT * EXCEPT (parse_error, expected_chain_id)
+SELECT *,
+  CASE
+    WHEN parse_error IS NOT NULL THEN 'file_not_readable'
+    WHEN NOT (chain_id <=> expected_chain_id) THEN 'wrong_chain'
+    WHEN file_date IS NULL THEN 'no_file_date'
+    WHEN store_id IS NULL OR store_id = '' THEN 'no_store_id'
+    WHEN item_code IS NULL THEN 'no_item_code'
+    WHEN price IS NULL THEN 'price_not_a_number'
+    WHEN price <= 0 THEN 'price_zero_or_less'
+  END AS reject_reason
 FROM base
-WHERE parse_error IS NULL
-  AND chain_id <=> expected_chain_id
-  AND file_date IS NOT NULL
-  AND store_id IS NOT NULL AND store_id <> ''
-  AND item_code IS NOT NULL
-  AND price > 0
-QUALIFY row_number() OVER (
-  PARTITION BY chain, store_id, item_code, file_date
-  ORDER BY CASE source WHEN 'scraper' THEN 1 ELSE 2 END, file_time DESC, modified_at DESC, price_updated_at DESC NULLS LAST, price ASC, source_file
-) = 1
 """, args={"last_load": last_load})
 
-new_obs.createOrReplaceTempView("new_obs")
+classified.createOrReplaceTempView("classified")
+
+# COMMAND ----------
+
+# Rejects first: saving prices moves the watermark forward.
+spark.sql("""
+MERGE INTO workspace.silver.quarantine AS t
+USING (
+  SELECT
+    sha2(concat_ws('|', source_file, to_json(fields), parse_error), 256) AS row_key,
+    reject_reason, chain, source, chain_id, store_id, item_code, price_raw,
+    parse_error, file_date, source_file, collected_date, modified_at,
+    bronze_loaded_at, header, fields,
+    current_timestamp() AS quarantined_at
+  FROM classified
+  WHERE reject_reason IS NOT NULL
+) AS s
+ON t.row_key = s.row_key
+WHEN NOT MATCHED THEN INSERT *
+""")
 
 # COMMAND ----------
 
 spark.sql("""
 MERGE INTO workspace.silver.price_obs AS t
-USING new_obs AS s
+USING (
+  SELECT * EXCEPT (parse_error, header, fields, price_raw, expected_chain_id, reject_reason)
+  FROM classified
+  WHERE reject_reason IS NULL
+  QUALIFY row_number() OVER (
+    PARTITION BY chain, store_id, item_code, file_date
+    ORDER BY CASE source WHEN 'scraper' THEN 1 ELSE 2 END, file_time DESC, modified_at DESC, price_updated_at DESC NULLS LAST, price ASC, source_file
+  ) = 1
+) AS s
 ON  t.file_date = s.file_date
 AND t.chain = s.chain
 AND t.store_id = s.store_id
