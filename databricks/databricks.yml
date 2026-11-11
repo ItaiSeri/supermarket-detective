@@ -22,6 +22,16 @@ resources:
         - task_key: load_promotions
           notebook_task:
             notebook_path: ./notebooks/bronze_promotion_items.py
+        - task_key: log_run
+          run_if: ALL_DONE
+          depends_on:
+            - task_key: load_prices
+            - task_key: load_stores
+            - task_key: load_promotions
+          notebook_task:
+            notebook_path: ./notebooks/ops_run_log.py
+            base_parameters:
+              job_run_id: "{{job.run_id}}"
     silver_load:
       name: silver_load
       tasks:
@@ -55,3 +65,24 @@ resources:
             - task_key: build_items
           notebook_task:
             notebook_path: ./notebooks/silver_dq.py
+        - task_key: log_run
+          run_if: ALL_DONE
+          depends_on:
+            - task_key: build_dq
+            - task_key: build_promotion_obs
+          notebook_task:
+            notebook_path: ./notebooks/ops_run_log.py
+            base_parameters:
+              job_run_id: "{{job.run_id}}"
+    daily_load:
+      name: daily_load
+      max_concurrent_runs: 1
+      tasks:
+        - task_key: run_bronze
+          run_job_task:
+            job_id: ${resources.jobs.bronze_load.id}
+        - task_key: run_silver
+          depends_on:
+            - task_key: run_bronze
+          run_job_task:
+            job_id: ${resources.jobs.silver_load.id}
