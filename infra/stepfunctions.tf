@@ -85,13 +85,42 @@ resource "aws_sfn_state_machine" "collect" {
             ItemFailed = { Type = "Pass", End = true }
           }
         }
+        # remember whether any item failed; Databricks starts either way
+        Assign = {
+          someFailed = "{% $count($states.result[ok = false]) > 0 %}"
+        }
+        # if the Map itself breaks, also go on to Databricks and fail at the end
+        Catch = [{
+          ErrorEquals = ["States.ALL"]
+          Assign      = { someFailed = true }
+          Next        = "StartDatabricks"
+        }]
+        Next = "StartDatabricks"
+      }
+      # start the Databricks parent job (bronze_load then silver_load); see databricks_trigger.tf
+      StartDatabricks = {
+        Type     = "Task"
+        Resource = "arn:aws:states:::http:invoke"
+        Arguments = {
+          ApiEndpoint    = local.databricks_run_now_url
+          Method         = "POST"
+          Authentication = { ConnectionArn = aws_cloudwatch_event_connection.databricks.arn }
+          RequestBody    = { job_id = var.databricks_daily_job_id }
+        }
+        # a failed call after the retries fails the whole run, so the alarm email fires
+        Retry = [{
+          ErrorEquals     = ["States.ALL"]
+          IntervalSeconds = 30
+          MaxAttempts     = 3
+          BackoffRate     = 2
+        }]
         Next = "CheckResults"
       }
-      # all items are done: mark the whole run failed if any item failed
+      # Databricks is started: mark the whole run failed if any item failed
       CheckResults = {
         Type = "Choice"
         Choices = [{
-          Condition = "{% $count($states.input[ok = false]) > 0 %}"
+          Condition = "{% $someFailed %}"
           Next      = "SomeFailed"
         }]
         Default = "AllOk"
@@ -99,7 +128,7 @@ resource "aws_sfn_state_machine" "collect" {
       SomeFailed = {
         Type  = "Fail"
         Error = "SomeItemsFailed"
-        Cause = "At least one chain + file type failed; see the Map results"
+        Cause = "At least one chain + file type failed (Databricks was started anyway); see the Map results"
       }
       AllOk = { Type = "Succeed" }
     }
