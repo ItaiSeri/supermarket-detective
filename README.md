@@ -283,9 +283,44 @@ Managed Delta table, clustered by `chain`, `store_id` and `item_code`, built by 
 
 Checked 2026-11-10: 20,029,515 `price_obs` rows became 7,643,904 periods (7,521,408 first seen, 119,555 value changed, 2,941 returned), 7,489,021 of them current, 74 MB, built in 38 s. The ratio is low because only a few full days exist and every product needs a first row. 23,621 of the value changes kept the same price, mostly `allow_discount` flips (20,259), so analyses of price changes should compare `price`, not count periods.
 
+### Silver table: `workspace.silver.items`
+
+Managed Delta table, clustered by `item_key`, built by `databricks/notebooks/silver_items.py` (job `silver_load`, task `build_items`, which runs after `build_stores`; not scheduled yet). One row per product, with the descriptive fields that `price_obs` does not carry: name, manufacturer, country, package size. A product is only here if one of its rows reached `price_obs`: the notebook applies the same reject rules as `silver_price_obs.py` (file not readable, wrong chain, no file date, store or item code, price not a positive number).
+
+**Key rule.** A 13-digit barcode is the same product in every chain, but some codes are a chain's own internal numbers (a code like `374` is a mushroom in one chain and a fish in another). A code is `shared` when `ItemType` is `1` or the code looks like a barcode (8, 12 or 13 digits). Every other code is `chain`: its key is `chain:item_code`. The official meaning of `ItemType` is not confirmed. The data says: `1` means a barcode for most rows, `0` means an internal code for most rows, and Mahsani Ashuk and Victory publish real barcodes as `0`. That is why the barcode shape is part of the rule. Measured 2026-11-11 on all of `price_obs` (246,583 chain + code pairs):
+- Rule on `ItemType` alone would put 1,679 chain + code pairs (1,410 real barcodes, 1.3% of all keys) in the wrong scope. Example: Nutella 750 g (`80176800`) is `1` in seven chains and `0` in Mahsani Ashuk and Victory. Adding the barcode shape removes this.
+- `ItemType` 0 codes that appear in 2+ chains (1,355) are mostly short internal codes with different products, so they stay chain-scoped. Barcode-shaped `0` codes that appear in 2+ chains and are never `1` (17 codes) are the same product in the sampled names.
+- `ItemType` 1 codes shorter than 8 digits: 660 codes, every one in a single chain, so no false merge.
+- `ItemType` changes over time within one chain for 13 pairs (0.005%). If the new type moves the code to another scope, the product gets a second row. Not handled.
+
+**Loading:** incremental. The notebook reads only bronze rows newer than the largest `bronze_loaded_at` in `items`, builds one row per key from them, joins that to the stored row and MERGEs on `item_key`. Attributes come from the latest observation (file date, then file time, then load time) and change only if the new observation is not older than the stored one. `first_seen` and `last_seen` only widen; `chains` and `names` only grow (distinct, sorted). If the table is empty, it is built from all of bronze. A second run reads 0 rows and changes 0.
+
+| Column | Type | Meaning |
+|---|---|---|
+| `item_key` | STRING | Key: `item_code` when `shared`, `chain:item_code` when `chain` |
+| `item_scope` | STRING | `shared` or `chain` |
+| `chain` | STRING | Chain; NULL when `shared` |
+| `item_code` | STRING | Product code as published |
+| `item_type` | STRING | `ItemType` of the latest observation |
+| `item_name` | STRING | Name; `ItemName` or `ItemNm` depending on the chain |
+| `manufacturer_name` | STRING | `ManufacturerName` or `ManufactureName`, depending on the chain |
+| `manufacture_country` | STRING | `ManufactureCountry` |
+| `manufacturer_item_description` | STRING | `ManufacturerItemDescription` or `ManufactureItemDescription` |
+| `quantity` | DECIMAL(12,3) | Package quantity |
+| `unit_qty`, `unit_of_measure` | STRING | As in `price_obs` |
+| `is_weighted` | BOOLEAN | Sold by weight |
+| `chains`, `chains_count` | ARRAY<STRING>, INT | Chains that published the product, and how many |
+| `names`, `name_variants` | ARRAY<STRING>, INT | Distinct names seen, and how many |
+| `first_seen`, `last_seen` | DATE | First and last file date |
+| `last_file_time` | STRING | File time of the latest observation (used for the "not older" test) |
+| `last_source_file` | STRING | S3 path of the latest file |
+| `bronze_loaded_at` | TIMESTAMP | Watermark: largest bronze load time seen |
+
+Checked 2026-11-11: 126,809 items, 114,101 `shared` (36,860 seen in 2+ chains) and 12,708 `chain`. All 246,583 chain + code pairs in `price_obs` map to an item and no item is unused. No item without a name; 29,471 without a manufacturer name and 34,245 without a country. The most widely published products (10 chains) have up to 16 different names. 9.3 MB in 4 files. First build 53 s, second run 17 s with 0 rows read, inserted or updated (Delta history, `numSourceRows` 0). Databricks Free Edition, serverless.
+
 ### Silver table: `workspace.silver.dq_results`
 
-Managed Delta table, written by `databricks/notebooks/silver_dq.py` (job `silver_load`, task `build_dq`, which runs after `build_price_obs` and `build_price_history`). One row per check per run, appended. Each check is one query that returns one number: above `fail_above` is FAIL, above `warn_above` is WARNING, otherwise PASS. Results are saved first, then any FAIL stops the job.
+Managed Delta table, written by `databricks/notebooks/silver_dq.py` (job `silver_load`, task `build_dq`, which runs after `build_price_obs`, `build_price_history` and `build_items`). One row per check per run, appended. Each check is one query that returns one number: above `fail_above` is FAIL, above `warn_above` is WARNING, otherwise PASS. Results are saved first, then any FAIL stops the job.
 
 | Column | Type | Meaning |
 |---|---|---|
@@ -312,8 +347,11 @@ Managed Delta table, written by `databricks/notebooks/silver_dq.py` (job `silver
 | `price_jump_over_300pct` | business | 100 | - | 7, PASS |
 | `history_days_mismatch` | row | - | 0 | 0, PASS |
 | `history_overlapping_periods` | row | - | 0 | 0, PASS |
+| `items_repeated_keys` | row | - | 0 | 0, PASS |
+| `price_obs_without_item` | row | - | 0 | 0, PASS |
+| `items_without_name` | row | 0 | - | 0, PASS |
 
-The limit of 100 on price jumps comes from one measured day and is provisional. The stop-on-FAIL path has not been seen in a real run yet. The file-level checks for expected stores and row counts come with the completeness work in S6.
+`price_obs_without_item` looks at the latest day only. The limit of 0 on items without a name is measured (0 today), so any missing name shows as a WARNING. The limit of 100 on price jumps comes from one measured day and is provisional. The stop-on-FAIL path has not been seen in a real run yet. The file-level checks for expected stores and row counts come with the completeness work in S6.
 
 ## Stores files: what the data looks like
 

@@ -43,9 +43,15 @@ resources:
             - task_key: build_price_obs
           notebook_task:
             notebook_path: ./notebooks/silver_price_history.py
+        - task_key: build_items
+          depends_on:
+            - task_key: build_stores
+          notebook_task:
+            notebook_path: ./notebooks/silver_items.py
         - task_key: build_dq
           depends_on:
             - task_key: build_price_obs
             - task_key: build_price_history
+            - task_key: build_items
           notebook_task:
             notebook_path: ./notebooks/silver_dq.py

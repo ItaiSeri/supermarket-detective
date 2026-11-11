@@ -19,6 +19,7 @@ P = "workspace.silver.price_obs"
 Q = "workspace.silver.quarantine"
 S = "workspace.silver.stores"
 H = "workspace.silver.price_history"
+I = "workspace.silver.items"
 
 latest = spark.sql(f"SELECT max(file_date) AS d FROM {P}").first()["d"]
 previous = spark.sql(f"SELECT max(file_date) AS d FROM {P} WHERE file_date < DATE'{latest}'").first()["d"]
@@ -62,6 +63,15 @@ checks = [
     ("history_overlapping_periods", "row",
      f"SELECT count_if(first_seen <= prev_last) FROM (SELECT first_seen, lag(last_seen) OVER (PARTITION BY chain, store_id, item_code ORDER BY first_seen) AS prev_last FROM {H})",
      None, 0, "Two periods of the same product at a store overlap"),
+    ("items_repeated_keys", "row",
+     f"SELECT count(*) FROM (SELECT 1 FROM {I} GROUP BY item_key HAVING count(*) > 1)",
+     None, 0, "Same product key appears more than once in items"),
+    ("price_obs_without_item", "row",
+     f"SELECT count(*) FROM {P} p LEFT ANTI JOIN {I} i ON i.item_key = CASE WHEN p.item_type = '1' OR p.item_code RLIKE '^([0-9]{{8}}|[0-9]{{12,13}})$' THEN p.item_code ELSE concat(p.chain, ':', p.item_code) END WHERE p.file_date = DATE'{latest}'",
+     None, 0, "Prices on the latest day whose product has no row in items"),
+    ("items_without_name", "row",
+     f"SELECT count_if(item_name IS NULL) FROM {I}",
+     0, None, "Products in items with no name"),
 ]
 
 # COMMAND ----------
