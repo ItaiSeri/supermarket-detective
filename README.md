@@ -253,7 +253,7 @@ Managed Delta table, clustered by `file_date` and `chain`, built by `databricks/
 
 Other promotion fields, such as `Remarks` and `PromotionDays`, stay in bronze.
 
-Checked 2026-11-10: of 35,694,531 bronze rows, 31,261,575 kept, 4,432,950 repeats dropped, 6 rejected (2 files with no promotions, 4 negative prices), which adds up to the bronze total. No repeated key. 10 chains, 981 chain + store pairs, 44 file dates, of which 3 are full days; the others come from old files still listed on the sites. A full day is about 11.5 million rows, and the table is 481 MB. The first load took under 3 minutes; a second run read 0 rows and inserted 0. 14 stores publish promotions but aren't in `silver.stores` (Shufersal 13, Keshet 1). 104 rows had already expired on their file date. `silver_dq` has no promotion checks yet.
+Checked 2026-11-10: of 35,694,531 bronze rows, 31,261,575 kept, 4,432,950 repeats dropped, 6 rejected (2 files with no promotions, 4 negative prices), which adds up to the bronze total. No repeated key. 10 chains, 981 chain + store pairs, 44 file dates, of which 3 are full days; the others come from old files still listed on the sites. A full day is about 11.5 million rows, and the table is 481 MB. The first load took under 3 minutes; a second run read 0 rows and inserted 0. 14 stores publish promotions but aren't in `silver.stores` (Shufersal 13, Keshet 1). 104 rows had already expired on their file date. `silver_dq` now has promotion checks (see the DQ section).
 
 ### Silver table: `workspace.silver.price_history`
 
@@ -353,8 +353,17 @@ Managed Delta table, written by `databricks/notebooks/silver_dq.py` (job `silver
 | `items_repeated_keys` | row | - | 0 | 0, PASS |
 | `price_obs_without_item` | row | - | 0 | 0, PASS |
 | `items_without_name` | row | 0 | - | 0, PASS |
+| `chain_without_price_files` | file | - | 0 | 0, PASS |
+| `price_store_completeness` | file | 0 | - | 0, PASS |
+| `promotion_repeated_keys` | row | - | 0 | 0, PASS |
+| `promotion_reject_percent` | row | 0.1 | 5 | 0.00003, PASS |
+| `promotion_expired_percent` | business | 0.1 | - | 0, PASS |
 
-`price_obs_without_item` looks at the latest day only. The limit of 0 on items without a name is measured (0 today), so any missing name shows as a WARNING. The limit of 100 on price jumps comes from one measured day and is provisional. The stop-on-FAIL path has not been seen in a real run yet. The file-level checks for expected stores and row counts come with the completeness work in S6.
+`price_obs_without_item` looks at the latest day only. The limit of 0 on items without a name is measured (0 today), so any missing name shows as a WARNING. The limit of 100 on price jumps comes from one measured day and is provisional. The stop-on-FAIL path has not been seen in a real run yet. The row-count-per-file check (±30% of the 7-day average) is not built yet.
+
+**Price completeness (S6).** A run can report `ok` and still miss files, because the scraper swallows listing timeouts (a Shufersal run once missed 24 of 417 price files). Two checks compare each chain's newest Stores file (on or before the latest price date, physical stores only, as in `silver.stores`) with the stores that have rows in `price_obs` on a date. Measured 2026-11-08 to 2026-11-10 (stores listed, stores missing a price file): Shufersal 416, 1; Rami Levy 98, 0; Carrefour/Yeinot Bitan 144, 60 (about 42% every day, so it is that chain's normal level); Mahsani Ashuk 64, 0 to 1; Victory 67, 0 to 1; Yohananof 50, 3; Keshet 23, 1; Osher Ad 24, 0 to 1; Tiv Taam 47, 0; Hazi Hinam 12, 0. Because each chain has its own normal level, `price_store_completeness` compares a chain with itself: it counts the chains whose missing stores on the latest date exceed the median of the earlier days in the last 7 (days the chain published) by more than 2 stores and more than 3% of its stores, and gives a WARNING above 0. A chain with no earlier day is compared with itself, so it cannot warn on its first day. The Shufersal incident (24 extra missing, 5.8%) would trigger it; a single store of Osher Ad (4%) does not. `chain_without_price_files` is a FAIL above 0: a chain that lists stores but has no price rows at all on the latest date. Limits: "published" means rows in `price_obs`, so a store whose file was rejected completely counts as missing; the latest date is the newest `file_date` in `price_obs`, so a stray file with a later date would make it count every chain as missing.
+
+**Promotion checks.** They use the newest `file_date` in `promotion_obs`. `promotion_repeated_keys` (key `chain` + `store_id` + `promotion_id` + `group_id` + `item_code`, FAIL above 0); `promotion_reject_percent` is `promotion_quarantine` rows over kept plus rejected rows of that day (WARNING above 0.1, FAIL above 5, the same limits as for prices; 3 of 11.3 million rows on 2026-11-10); `promotion_expired_percent` is rows whose `end_at` is before the file date (0 on 2026-11-10, 104 rows or 0.001% on 2026-11-09), WARNING above 0.1 and never FAIL, since a chain may keep an ended promotion in the file.
 
 ## Stores files: what the data looks like
 

@@ -20,13 +20,64 @@ Q = "workspace.silver.quarantine"
 S = "workspace.silver.stores"
 H = "workspace.silver.price_history"
 I = "workspace.silver.items"
+PO = "workspace.silver.promotion_obs"
+PQ = "workspace.silver.promotion_quarantine"
 
 latest = spark.sql(f"SELECT max(file_date) AS d FROM {P}").first()["d"]
 previous = spark.sql(f"SELECT max(file_date) AS d FROM {P} WHERE file_date < DATE'{latest}'").first()["d"]
 collected = spark.sql(f"SELECT max(collected_date) AS d FROM {P}").first()["d"]
 run_at = spark.sql("SELECT current_timestamp() AS t").first()["t"]
 
+promo_latest = spark.sql(f"SELECT max(file_date) AS d FROM {PO}").first()["d"]
+
 day_stores = f"(SELECT DISTINCT chain, store_id FROM {P} WHERE file_date = DATE'{latest}')"
+
+# Completeness: physical stores in each chain's newest Stores file (on or before the latest
+# price date) against stores that have rows in price_obs on a date. Store IDs lose leading
+# zeros the same way as in silver_stores and silver_price_obs.
+listed_cte = f"""
+sf AS (
+  SELECT chain, regexp_replace(fields['StoreID'], '^0+(?=.)', '') AS store_id,
+         to_date(regexp_extract(file_name, '-(20[0-9]{{6}})', 1), 'yyyyMMdd') AS d
+  FROM workspace.bronze.stores WHERE parse_error IS NULL
+),
+newest AS (SELECT chain, max(d) AS d FROM sf WHERE d <= DATE'{latest}' GROUP BY chain),
+listed AS (
+  SELECT DISTINCT sf.chain, sf.store_id
+  FROM sf JOIN newest n ON n.chain = sf.chain AND n.d = sf.d
+  JOIN {S} s ON s.chain = sf.chain AND s.store_id = sf.store_id AND s.is_physical
+)"""
+
+# One row per chain and date in the last 7 days: stores listed, stores that published
+pub_cte = f"""
+nlisted AS (SELECT chain, count(*) AS n FROM listed GROUP BY chain),
+daily AS (
+  SELECT u.chain, u.file_date, count(DISTINCT u.store_id) AS published
+  FROM {P} u JOIN listed l ON l.chain = u.chain AND l.store_id = u.store_id
+  WHERE u.file_date BETWEEN DATE'{latest}' - 7 AND DATE'{latest}'
+  GROUP BY u.chain, u.file_date
+)"""
+
+# Chains that published on the latest date, with missing stores now and in a normal
+# recent day (median of the earlier days in the window on which the chain published)
+completeness_gap = f"""
+WITH {listed_cte}, {pub_cte},
+today AS (
+  SELECT d.chain, n.n AS listed, n.n - d.published AS missing
+  FROM daily d JOIN nlisted n ON n.chain = d.chain WHERE d.file_date = DATE'{latest}'
+),
+base AS (
+  SELECT d.chain, percentile_approx(n.n - d.published, 0.5) AS missing
+  FROM daily d JOIN nlisted n ON n.chain = d.chain WHERE d.file_date < DATE'{latest}'
+  GROUP BY d.chain
+)
+SELECT count_if(today.missing - coalesce(base.missing, today.missing) > greatest(2, 0.03 * today.listed))
+FROM today LEFT JOIN base ON base.chain = today.chain"""
+
+chains_without_files = f"""
+WITH {listed_cte}
+SELECT count(*) FROM (SELECT DISTINCT chain FROM listed) l
+LEFT ANTI JOIN (SELECT DISTINCT chain FROM {P} WHERE file_date = DATE'{latest}') p ON p.chain = l.chain"""
 
 # name, level, query returning one number, warn above, fail above, meaning
 checks = [
@@ -72,6 +123,21 @@ checks = [
     ("items_without_name", "row",
      f"SELECT count_if(item_name IS NULL) FROM {I}",
      0, None, "Products in items with no name"),
+    ("chain_without_price_files", "file",
+     chains_without_files,
+     None, 0, "Chains whose Stores file lists physical stores but that have no price rows on the latest date"),
+    ("price_store_completeness", "file",
+     completeness_gap,
+     0, None, "Chains with more stores missing a price file on the latest date than on a normal recent day (beyond 2 stores or 3% of the chain)"),
+    ("promotion_repeated_keys", "row",
+     f"SELECT count(*) FROM (SELECT 1 FROM {PO} WHERE file_date = DATE'{promo_latest}' GROUP BY chain, store_id, promotion_id, group_id, item_code HAVING count(*) > 1)",
+     None, 0, "Same chain, store, promotion, group, product and day appears more than once in promotion_obs"),
+    ("promotion_reject_percent", "row",
+     f"SELECT 100.0 * q.n / (q.n + p.n) FROM (SELECT count(*) AS n FROM {PQ} WHERE file_date = DATE'{promo_latest}') q, (SELECT count(*) AS n FROM {PO} WHERE file_date = DATE'{promo_latest}') p",
+     0.1, 5, "Percent of the latest promotion day's rows that were rejected"),
+    ("promotion_expired_percent", "business",
+     f"SELECT 100.0 * count_if(end_at < file_date) / count(*) FROM {PO} WHERE file_date = DATE'{promo_latest}'",
+     0.1, None, "Percent of the latest promotion day's rows already past their end date on the file date"),
 ]
 
 # COMMAND ----------
