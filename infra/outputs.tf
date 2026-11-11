@@ -15,3 +15,6 @@ output "collect_state_machine_arn" {
 output "work_list" {
   value = local.work_list
 }
+output "databricks_connection_arn" {
+  value = aws_cloudwatch_event_connection.databricks.arn
+}
