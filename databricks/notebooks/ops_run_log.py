@@ -108,7 +108,7 @@ CREATE TABLE IF NOT EXISTS workspace.ops.run_log (
   job_name       STRING,
   task_key       STRING,
   attempt        INT       COMMENT 'Retry number, 0 = first try',
-  trigger_type   STRING    COMMENT 'ONE_TIME (manual), PERIODIC, RUN_JOB_TASK ...',
+  trigger_type   STRING    COMMENT 'ONE_TIME (manual), PERIODIC, FILE_ARRIVAL, RUN_JOB_TASK ...',
   status         STRING    COMMENT 'SUCCESS, FAILED, CANCELED, TIMEDOUT, UPSTREAM_FAILED, SKIPPED, RUNNING',
   started_at     TIMESTAMP COMMENT 'UTC',
   ended_at       TIMESTAMP COMMENT 'UTC',

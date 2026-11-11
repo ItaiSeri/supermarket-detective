@@ -85,29 +85,31 @@ resource "aws_sfn_state_machine" "collect" {
             ItemFailed = { Type = "Pass", End = true }
           }
         }
-        # remember whether any item failed; Databricks starts either way
+        # remember whether any item failed; Databricks starts either way (the marker is written either way)
         Assign = {
           someFailed = "{% $count($states.result[ok = false]) > 0 %}"
         }
-        # if the Map itself breaks, also go on to Databricks and fail at the end
+        # if the Map itself breaks, still write the marker and fail at the end
         Catch = [{
           ErrorEquals = ["States.ALL"]
           Assign      = { someFailed = true }
-          Next        = "StartDatabricks"
+          Next        = "WriteMarker"
         }]
-        Next = "StartDatabricks"
+        Next = "WriteMarker"
       }
-      # start the Databricks parent job (bronze_load then silver_load); see databricks_trigger.tf
-      StartDatabricks = {
+      # write a marker file; Databricks' file arrival trigger on this folder starts
+      # daily_load (see collect_marker.tf). One new file per execution: the trigger
+      # fires on new files, not on overwrites. Flat folder, no subfolders.
+      WriteMarker = {
         Type     = "Task"
-        Resource = "arn:aws:states:::http:invoke"
+        Resource = "arn:aws:states:::aws-sdk:s3:putObject"
         Arguments = {
-          ApiEndpoint    = local.databricks_run_now_url
-          Method         = "POST"
-          Authentication = { ConnectionArn = aws_cloudwatch_event_connection.databricks.arn }
-          RequestBody    = { job_id = var.databricks_daily_job_id }
+          Bucket      = aws_s3_bucket.raw.bucket
+          Key         = "{% 'source=scraper/_markers/' & $substring($states.context.Execution.StartTime, 0, 10) & '_' & $states.context.Execution.Name & '.json' %}"
+          Body        = "{% $string({'execution': $states.context.Execution.Id, 'started': $states.context.Execution.StartTime, 'some_failed': $someFailed}) %}"
+          ContentType = "application/json"
         }
-        # a failed call after the retries fails the whole run, so the alarm email fires
+        # a failed write after the retries fails the whole run, so the alarm email fires
         Retry = [{
           ErrorEquals     = ["States.ALL"]
           IntervalSeconds = 30
@@ -116,7 +118,7 @@ resource "aws_sfn_state_machine" "collect" {
         }]
         Next = "CheckResults"
       }
-      # Databricks is started: mark the whole run failed if any item failed
+      # the marker is written: mark the whole run failed if any item failed
       CheckResults = {
         Type = "Choice"
         Choices = [{
@@ -128,7 +130,7 @@ resource "aws_sfn_state_machine" "collect" {
       SomeFailed = {
         Type  = "Fail"
         Error = "SomeItemsFailed"
-        Cause = "At least one chain + file type failed (Databricks was started anyway); see the Map results"
+        Cause = "At least one chain + file type failed (the Databricks marker was written anyway); see the Map results"
       }
       AllOk = { Type = "Succeed" }
     }

@@ -213,7 +213,7 @@ a:focus-visible { outline: 2px solid var(--daily); outline-offset: 2px; }
     <!-- AWS: shared -->
     <rect x="300" y="420" width="380" height="62" rx="6" class="box"/>
     <text x="312" y="444" class="bt">S3 raw archive (versioned, kept forever)</text>
-    <text x="312" y="464" class="bs">source=scraper|kaggle / date= / chain= + manifest</text>
+    <text x="312" y="464" class="bs">source=scraper|kaggle / date= / chain= + _markers</text>
 
     <!-- Databricks: medallion stacked bottom-up -->
     <rect x="732" y="540" width="210" height="62" rx="6" class="box"/>
@@ -294,7 +294,7 @@ a:focus-visible { outline: 2px solid var(--daily); outline-offset: 2px; }
     <text x="1207" y="330" class="el">charts</text>
   </svg>
   </div>
-  <figcaption>Both lanes write to the same S3 archive in the same folder layout, so everything after S3 doesn't care where a file came from. The medallion is drawn bottom-up: raw files at the bottom, report tables at the top. Not drawn: an EventBridge rule and SNS send an email on any failed Step Functions run, and Power BI Desktop runs on the laptop only as the authoring tool; nothing scheduled runs there.</figcaption>
+  <figcaption>Both lanes write to the same S3 archive in the same folder layout, so everything after S3 doesn't care where a file came from. The medallion is drawn bottom-up: raw files at the bottom, report tables at the top. Not drawn: when the Map ends, Step Functions writes a small marker file to <span class="mono">source=scraper/_markers/</span> (WriteMarker), and a file arrival trigger on that folder starts the Databricks job <span class="mono">daily_load</span> (bronze, then silver); AWS holds no Databricks token, because EventBridge Connections are disabled in Tel Aviv. An EventBridge rule and SNS send an email on any failed Step Functions run, and Power BI Desktop runs on the laptop only as the authoring tool; nothing scheduled runs there.</figcaption>
 </figure>
 
 <section>
