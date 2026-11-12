@@ -83,6 +83,7 @@ def handler(event, context=None):
         with open_with_retries(kaggle_url(path, version)) as response:
             sent_length = response.headers.get("Content-Length")
             google_hash = response.headers.get("x-goog-hash", "")
+            etag = (response.headers.get("ETag") or "").strip('"')
             # stream: read a chunk, hash it, gzip it to disk; /tmp only ever holds the small .gz
             with gzip.GzipFile(gz_path, "wb", compresslevel=5, mtime=0) as out:
                 while True:
@@ -104,6 +105,9 @@ def handler(event, context=None):
         if google_md5 and google_md5 != md5.hexdigest():
             raise RuntimeError(f"{path} v{version}: md5 {md5.hexdigest()} differs from Google's {google_md5}")
 
+        # for ordinary Google Storage objects the ETag is the md5; it is recorded, not enforced
+        md5_matches_etag = (md5.hexdigest() == etag) if len(etag) == 32 else None
+
         gz_bytes = os.path.getsize(gz_path)
         s3.upload_file(
             gz_path, BUCKET, key,
@@ -124,6 +128,7 @@ def handler(event, context=None):
         "downloaded_bytes": raw_bytes,
         "md5": md5.hexdigest(),
         "md5_checked_against_google": bool(google_md5),
+        "md5_matches_etag": md5_matches_etag,
         "s3_key": key,
         "s3_bytes": stored,
         "secs": round(time.time() - started, 1),
