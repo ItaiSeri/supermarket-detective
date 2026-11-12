@@ -71,6 +71,12 @@ SELECT coalesce(max(bronze_loaded_at), TIMESTAMP'1900-01-01') AS t
 FROM workspace.silver.promotion_obs
 """).first()["t"]
 
+# Optional one-off re-read after a rule change: job parameter reload_after (a timestamp)
+# moves the watermark back. Safe to re-read, because both MERGEs skip rows already saved.
+dbutils.widgets.text("reload_after", "")
+if dbutils.widgets.get("reload_after"):
+    last_load = dbutils.widgets.get("reload_after")
+
 print("Reading bronze rows loaded after", last_load)
 
 # COMMAND ----------
@@ -85,7 +91,16 @@ base AS (
   SELECT
     b.chain,
     b.source,
-    trim(coalesce(b.header['ChainID'], b.header['ChainId'])) AS chain_id,
+    -- Kaggle's Victory and Mahsani Ashuk promo files of 2025 carry a cut-off ChainID ('72906').
+    -- The original file name inside them (PromoFull<13-digit chain id>-...) still has the full ID,
+    -- so a header ID shorter than 13 digits is replaced by the file name's; the wrong_chain
+    -- check below still compares it with the folder's chain.
+    CASE
+      WHEN length(trim(coalesce(b.header['ChainID'], b.header['ChainId']))) < 13
+       AND regexp_extract(b.file_name, '^Promo(?:Full)?([0-9]{13})-', 1) <> ''
+      THEN regexp_extract(b.file_name, '^Promo(?:Full)?([0-9]{13})-', 1)
+      ELSE trim(coalesce(b.header['ChainID'], b.header['ChainId']))
+    END AS chain_id,
     trim(coalesce(b.header['SubChainID'], b.header['SubChainId'])) AS sub_chain_id,
     regexp_replace(trim(coalesce(b.header['StoreID'], b.header['StoreId'])), '^0+(?=.)', '') AS store_id,
     -- Keshet publishes the same promotion as 1145634 and as 0001145634, depending on the layout.

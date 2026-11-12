@@ -111,11 +111,12 @@ def items_for(version, date, kinds, cache_dir=None):
 
 
 def one_version_per_date(dates):
-    """version -> date, keeping the lowest version of each date (the files are written under date=)."""
-    first = {}
+    """version -> date, keeping the highest (latest uploaded) version of each date, since a later
+    upload is more likely complete (decided by Itai 2026-11-12). The files are written under date=."""
+    last = {}
     for v in sorted(dates):
-        first.setdefault(dates[v], v)
-    return {v: d for d, v in first.items()}
+        last[dates[v]] = v
+    return {v: d for d, v in last.items()}
 
 
 def write_slice(path, items, note):
