@@ -39,6 +39,32 @@ CREATE TABLE IF NOT EXISTS workspace.silver.promotion_obs (
 CLUSTER BY (file_date, chain)
 """)
 
+# Store-wide promotions: a promotion that lists more than 10,000 products in one source file (a basket-level
+# offer such as a coupon, a donation or a delivery fee that carries the whole catalog). Bronze keeps one row for it
+# (store_wide = true, item NULL); here it is one row per store file + promotion, not per product.
+spark.sql("""
+CREATE TABLE IF NOT EXISTS workspace.silver.store_wide_promotions (
+  chain STRING,
+  chain_id STRING,
+  store_id STRING,
+  promotion_id STRING,
+  description STRING,
+  start_at TIMESTAMP,
+  end_at TIMESTAMP,
+  club_code STRING,
+  reward_type STRING,
+  discount_rate DECIMAL(12,4),
+  discounted_price DECIMAL(12,2),
+  items_in_promotion INT,
+  file_date DATE,
+  file_time STRING,
+  source STRING,
+  source_file STRING,
+  bronze_loaded_at TIMESTAMP
+)
+CLUSTER BY (file_date, chain)
+""")
+
 # Separate from silver.quarantine: the price checks in silver_dq count that table's rows.
 spark.sql("""
 CREATE TABLE IF NOT EXISTS workspace.silver.promotion_quarantine (
@@ -78,6 +104,13 @@ if dbutils.widgets.get("reload_after"):
     last_load = dbutils.widgets.get("reload_after")
 
 print("Reading bronze rows loaded after", last_load)
+
+last_load_sw = spark.sql("""
+SELECT coalesce(max(bronze_loaded_at), TIMESTAMP'1900-01-01') AS t
+FROM workspace.silver.store_wide_promotions
+""").first()["t"]
+if dbutils.widgets.get("reload_after"):
+    last_load_sw = dbutils.widgets.get("reload_after")
 
 # COMMAND ----------
 
@@ -143,11 +176,13 @@ base AS (
     b.header,
     b.promotion,
     b.item,
+    coalesce(b.store_wide, false) AS store_wide,
+    b.items_in_promotion,
     coalesce(b.item['DiscountedPrice'], b.promotion['DiscountedPrice']) AS price_raw,
     e.expected_chain_id
   FROM workspace.bronze.promotion_items b
   LEFT JOIN expected e ON b.chain = e.chain
-  WHERE b.loaded_at > :last_load
+  WHERE b.loaded_at > least(:last_load, :last_load_sw)
 )
 SELECT *,
   CASE
@@ -157,11 +192,11 @@ SELECT *,
     WHEN file_date IS NULL THEN 'no_file_date'
     WHEN store_id IS NULL OR store_id = '' THEN 'no_store_id'
     WHEN promotion_id IS NULL THEN 'no_promotion_id'
-    WHEN item_code IS NULL THEN 'no_item_code'
+    WHEN item_code IS NULL AND NOT store_wide THEN 'no_item_code'
     WHEN discounted_price < 0 THEN 'price_negative'
   END AS reject_reason
 FROM base
-""", args={"last_load": last_load})
+""", args={"last_load": last_load, "last_load_sw": last_load_sw})
 
 classified.createOrReplaceTempView("classified")
 
@@ -178,11 +213,11 @@ USING (
     bronze_loaded_at, header, promotion, item,
     current_timestamp() AS quarantined_at
   FROM classified
-  WHERE reject_reason IS NOT NULL
+  WHERE reject_reason IS NOT NULL AND bronze_loaded_at > :last_load
 ) AS s
 ON t.row_key = s.row_key
 WHEN NOT MATCHED THEN INSERT *
-""")
+""", args={"last_load": last_load})
 
 # COMMAND ----------
 
@@ -191,9 +226,10 @@ WHEN NOT MATCHED THEN INSERT *
 spark.sql("""
 MERGE INTO workspace.silver.promotion_obs AS t
 USING (
-  SELECT * EXCEPT (parse_error, promotion_seq, header, promotion, item, price_raw, expected_chain_id, reject_reason)
+  SELECT * EXCEPT (parse_error, promotion_seq, header, promotion, item, price_raw, expected_chain_id, reject_reason,
+                   store_wide, items_in_promotion)
   FROM classified
-  WHERE reject_reason IS NULL
+  WHERE reject_reason IS NULL AND NOT store_wide AND bronze_loaded_at > :last_load
   QUALIFY row_number() OVER (
     PARTITION BY chain, store_id, promotion_id, group_id, item_code, file_date
     ORDER BY CASE source WHEN 'scraper' THEN 1 ELSE 2 END, file_time DESC, modified_at DESC,
@@ -212,4 +248,34 @@ WHEN MATCHED AND (
   OR (t.source = s.source AND s.file_time > t.file_time)
 ) THEN UPDATE SET *
 WHEN NOT MATCHED THEN INSERT *
-""")
+""", args={"last_load": last_load})
+
+
+# COMMAND ----------
+
+# Store-wide promotions: one row per store file + promotion. Same winner rules as promotion_obs: the scraper beats
+# Kaggle, and inside one source the later file wins. The discount is the promotion-level one (item is NULL), so a
+# store-wide offer in the Groups layout, whose discount sits on the products, has no rate or price here.
+spark.sql("""
+MERGE INTO workspace.silver.store_wide_promotions AS t
+USING (
+  SELECT chain, chain_id, store_id, promotion_id, description, start_at, end_at, club_code, reward_type,
+         discount_rate, discounted_price, items_in_promotion, file_date, file_time, source,
+         source_file, bronze_loaded_at
+  FROM classified
+  WHERE reject_reason IS NULL AND store_wide AND bronze_loaded_at > :last_load_sw
+  QUALIFY row_number() OVER (
+    PARTITION BY chain, store_id, promotion_id, file_date
+    ORDER BY CASE source WHEN 'scraper' THEN 1 ELSE 2 END, file_time DESC, modified_at DESC, source_file
+  ) = 1
+) AS s
+ON  t.file_date = s.file_date
+AND t.chain = s.chain
+AND t.store_id = s.store_id
+AND t.promotion_id = s.promotion_id
+WHEN MATCHED AND (
+     (t.source = 'kaggle' AND s.source = 'scraper')
+  OR (t.source = s.source AND s.file_time > t.file_time)
+) THEN UPDATE SET *
+WHEN NOT MATCHED THEN INSERT *
+""", args={"last_load_sw": last_load_sw})

@@ -83,7 +83,7 @@ Managed Delta table (Databricks storage in Ohio), created by `databricks/noteboo
 
 ### Bronze table: `workspace.bronze.promotion_items`
 
-Managed Delta table (Databricks storage in Ohio), created by `databricks/notebooks/bronze_promotion_items.py` (job `bronze_load`, task `load_promotions`). One row per product in a promotion in a PromoFull file, for all 10 chains. A promotion with no products, or a file with no promotions, stays as one row with NULL `item`. Loaded by Auto Loader in the same batches as `price_items`.
+Managed Delta table (Databricks storage in Ohio), created by `databricks/notebooks/bronze_promotion_items.py` (job `bronze_load`, task `load_promotions`). One row per product in a promotion in a PromoFull file, for all 10 chains. A promotion with no products, or a file with no promotions, stays as one row with NULL `item`. A **store-wide** promotion (more than 10,000 products in one file, see below) is also one row with NULL `item`. Loaded by Auto Loader in the same batches as `price_items`.
 
 Promotion files come in two layouts, sometimes within one chain. Bronze keeps both as published, and silver matches them:
 
@@ -109,6 +109,12 @@ Promotion files come in two layouts, sometimes within one chain. Bronze keeps bo
 | `promotion` | MAP<STRING, STRING> | The promotion's fields at any depth, except its products. A tag that repeats keeps its values joined by `\|` |
 | `item` | MAP<STRING, STRING> | This product's fields, as published |
 | `loaded_at` | TIMESTAMP | When the row was loaded |
+| `items_in_promotion` | INT | Number of products this promotion lists in this file (counted from the tags, filled on every row; 0 for a promotion with none) |
+| `store_wide` | BOOLEAN | True when `items_in_promotion` is above 10,000: the promotion is then ONE row with NULL `item` |
+
+**Store-wide promotions (rule decided by Itai 2026-11-12):** a promotion that lists **more than 10,000 products in one source file** is store-wide: a basket-level offer (a donation, a delivery fee, a 30 NIS coupon, "10% discount") that carries the chain's whole catalog. It is kept as one row per source file (store) + promotion, not one row per product; the full list stays in raw S3. Why 10,000: measured on 2026-11-12, real product deals list at most about 9,100 products in the scraper data (and about 5,200 in the Kaggle sample), while store-wide offers start at about 11,500 (Shufersal Cibus coupon 83,475, Keshet "10% discount" 54,669, Carrefour December 2025 offers about 34,000 each, in about 170 store files, which was 17 of 20.9 million rows a day and made the Kaggle promotion load fail after 63 minutes). The count is taken before any product is built (in the XML parser for the scraper, in the SQL for Kaggle), so the big lists are never turned into rows. The rule is the constant `STORE_WIDE_MIN_ITEMS` in `bronze_promotion_items.py` and `bronze_kaggle.py`. One older Kaggle feed (Victory, Mahsani Ashuk) has one promotion + product per row, so a store-wide offer there can't be recognised and stays per product.
+
+One-off clean-up 2026-11-12 of rows loaded before the rule: 405 scraper promotions (Shufersal 21, Tiv Taam 376, Keshet 8) with 5,109,238 product rows were replaced by 405 rows; all Kaggle promotion rows were deleted and their versions set back to `pending` in the queue.
 
 Checked 2026-11-10: all 3,156 promotion files in S3 are loaded, 35,694,531 rows and 5,000,651 promotions, from all 10 chains. No file failed to parse, and every file's product rows and promotions match its tag counts. Two files contain no promotions, so each is one row with NULL `promotion`. The load took about 12 minutes.
 
@@ -253,6 +259,28 @@ Managed Delta table, written by `silver_price_obs.py`. One row per rejected bron
 
 Checked 2026-11-10: 6,798 rows (2,068 `price_zero_or_less`, 4,730 `wrong_chain`), which with kept rows and repeats adds up to bronze.
 
+### Silver table: `workspace.silver.store_wide_promotions`
+
+Managed Delta table, clustered by `file_date` and `chain`, filled by the same notebook and task as `promotion_obs` (`silver_promotion_obs.py`, task `build_promotion_obs`) from the bronze rows with `store_wide` = true: promotions that list more than 10,000 products in one source file (rule and the measured gap in the bronze section). One row per `chain` + `store_id` + `promotion_id` + `file_date`, saved with `MERGE` on that key; the scraper beats Kaggle, and inside one source the later file wins, as in `promotion_obs`. Its own watermark (latest `bronze_loaded_at` in this table). The products are not listed; `items_in_promotion` says how many there were.
+
+| Column | Type | Meaning |
+|---|---|---|
+| `chain`, `chain_id`, `store_id` | STRING | As in `promotion_obs` (store id without leading zeros; chain id from the file name when the header's is cut off) |
+| `promotion_id` | STRING | Without leading zeros |
+| `description` | STRING | Promotion text, for example the coupon's name |
+| `start_at`, `end_at` | TIMESTAMP | Promotion validity |
+| `club_code` | STRING | First number in the club field |
+| `reward_type` | STRING | Promotion-level reward type, when given |
+| `discount_rate` | DECIMAL(12,4) | Promotion-level discount, when given (not in the Groups layout, where it sits on the products) |
+| `discounted_price` | DECIMAL(12,2) | Promotion-level price, when given |
+| `items_in_promotion` | INT | Number of products the promotion listed in that file |
+| `file_date`, `file_time` | DATE, STRING | From the original file name |
+| `source` | STRING | `scraper` or `kaggle` |
+| `source_file` | STRING | Path of the file that carried it |
+| `bronze_loaded_at` | TIMESTAMP | When bronze loaded it |
+
+Rows that fail the same checks as `promotion_obs` (no file date, store ID or promotion ID, wrong chain) go to `silver.promotion_quarantine` with a NULL `item`. DQ check `store_wide_promotions_latest`: the most distinct store-wide promotions any chain had on the latest promotion day, WARNING above 20, never FAIL.
+
 ### Silver table: `workspace.silver.promotion_obs`
 
 Managed Delta table, clustered by `file_date` and `chain`, built by `databricks/notebooks/silver_promotion_obs.py` (job `silver_load`, task `build_promotion_obs`, which runs after `build_stores`; not scheduled yet). One row per `chain` + `store_id` + `promotion_id` + `group_id` + `item_code` + `file_date`: what the chain published about that product in that promotion on that day. It is an observation, and it says nothing about whether the deal is really cheaper; gold answers that by comparing with `price_obs`.
@@ -264,6 +292,8 @@ Managed Delta table, clustered by `file_date` and `chain`, built by `databricks/
 **Matching the two layouts:** `promotion_id` loses its leading zeros, because Keshet publishes the same promotion as `1145634` in one layout and `0001145634` in the other. The flat layout has no groups, so its `group_id` is `1`. Reward type, quantities, price and discount come from the product in the Groups layout and from the promotion in the flat layout.
 
 **Repeats inside one file:** a product can appear twice in the same group of a promotion, usually once at 0.00 and once at its real price (Shufersal, 183,548 of its 183,652 repeats). The row with a positive price is kept. If both are positive, the lower price is kept (98 cases). The official meaning of these pairs isn't confirmed.
+
+**Store-wide promotions are not here:** bronze rows with `store_wide` = true have no product, so this task skips them (they are not rejected as `no_item_code`) and writes them to `silver.store_wide_promotions` instead.
 
 **Rejected, stored in `silver.promotion_quarantine`:** a file that failed to parse, a file with no promotions, a chain ID that differs from the chain's ID in `silver.stores`, no file date, store ID, promotion ID or barcode, or a negative price. It has the columns of `silver.quarantine` plus `promotion_id`, with `promotion` and `item` in place of `fields`, and it is separate because the price checks in `silver_dq` count the rows of `silver.quarantine`. A price of 0 or a missing price isn't rejected: many promotions give only a discount percent or a gift.
 
@@ -417,7 +447,7 @@ Managed Delta table, written by `databricks/notebooks/silver_dq.py` (job `silver
 
 **Price completeness (S6).** A run can report `ok` and still miss files, because the scraper swallows listing timeouts (a Shufersal run once missed 24 of 417 price files). Two checks compare each chain's newest Stores file (on or before the latest price date, physical stores only, as in `silver.stores`) with the stores that have rows in `price_obs` on a date. Measured 2026-11-08 to 2026-11-10 (stores listed, stores missing a price file): Shufersal 416, 1; Rami Levy 98, 0; Carrefour/Yeinot Bitan 144, 60 (about 42% every day, so it is that chain's normal level); Mahsani Ashuk 64, 0 to 1; Victory 67, 0 to 1; Yohananof 50, 3; Keshet 23, 1; Osher Ad 24, 0 to 1; Tiv Taam 47, 0; Hazi Hinam 12, 0. Because each chain has its own normal level, `price_store_completeness` compares a chain with itself: it counts the chains whose missing stores on the latest date exceed the median of the earlier days in the last 7 (days the chain published) by more than 2 stores and more than 3% of its stores, and gives a WARNING above 0. A chain with no earlier day is compared with itself, so it cannot warn on its first day. The Shufersal incident (24 extra missing, 5.8%) would trigger it; a single store of Osher Ad (4%) does not. `chain_without_price_files` is a FAIL above 0: a chain that lists stores but has no price rows at all on the latest date. Limits: "published" means rows in `price_obs`, so a store whose file was rejected completely counts as missing; the latest date is the newest `file_date` in `price_obs`, so a stray file with a later date would make it count every chain as missing.
 
-**Promotion checks.** They use the newest `file_date` in `promotion_obs`. `promotion_repeated_keys` (key `chain` + `store_id` + `promotion_id` + `group_id` + `item_code`, FAIL above 0); `promotion_reject_percent` is `promotion_quarantine` rows over kept plus rejected rows of that day (WARNING above 0.1, FAIL above 5, the same limits as for prices; 3 of 11.3 million rows on 2026-11-10); `promotion_expired_percent` is rows whose `end_at` is before the file date (0 on 2026-11-10, 104 rows or 0.001% on 2026-11-09), WARNING above 0.1 and never FAIL, since a chain may keep an ended promotion in the file.
+**Promotion checks.** They use the newest `file_date` in `promotion_obs`. `promotion_repeated_keys` (key `chain` + `store_id` + `promotion_id` + `group_id` + `item_code`, FAIL above 0); `promotion_reject_percent` is `promotion_quarantine` rows over kept plus rejected rows of that day (WARNING above 0.1, FAIL above 5, the same limits as for prices; 3 of 11.3 million rows on 2026-11-10); `promotion_expired_percent` is rows whose `end_at` is before the file date (0 on 2026-11-10, 104 rows or 0.001% on 2026-11-09), WARNING above 0.1 and never FAIL, since a chain may keep an ended promotion in the file. `store_wide_promotions_latest` is the most distinct store-wide promotions any chain had on that day (WARNING above 20, never FAIL).
 
 ## Stores files: what the data looks like
 

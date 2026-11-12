@@ -22,6 +22,7 @@ H = "workspace.silver.price_history"
 I = "workspace.silver.items"
 PO = "workspace.silver.promotion_obs"
 PQ = "workspace.silver.promotion_quarantine"
+SW = "workspace.silver.store_wide_promotions"
 
 # The daily checks look at our own collection: Kaggle history rows (source = 'kaggle') are older days and
 # must neither move "the latest day" nor count in the collection checks.
@@ -169,6 +170,9 @@ checks = [
     ("promotion_expired_percent", "business",
      f"SELECT 100.0 * count_if(end_at < file_date) / count(*) FROM {PO} WHERE file_date = DATE'{promo_latest}'",
      0.1, None, "Percent of the latest promotion day's rows already past their end date on the file date"),
+    ("store_wide_promotions_latest", "business",
+     f"SELECT coalesce(max(n), 0) FROM (SELECT count(DISTINCT promotion_id) AS n FROM {SW} WHERE file_date = DATE'{promo_latest}' AND source = 'scraper' GROUP BY chain)",
+     20, None, "Most distinct store-wide promotions (more than 10,000 products in one file) any chain had on the latest promotion day"),
 ]
 
 # COMMAND ----------

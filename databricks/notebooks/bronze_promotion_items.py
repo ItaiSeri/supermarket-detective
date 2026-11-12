@@ -2,12 +2,18 @@
 import gzip, re
 import xml.etree.ElementTree as ET
 from pyspark.sql import functions as F
-from pyspark.sql.types import StructType, StructField, StringType, IntegerType, MapType, ArrayType
+from pyspark.sql.types import StructType, StructField, StringType, IntegerType, MapType, ArrayType, BooleanType
 
 # Bronze is a MANAGED Delta table (Databricks storage in us-east-2, next to the compute); the checkpoint stays in S3.
 BUCKET = "s3://supermarket-detective-raw-971422709739"
 SOURCE = f"{BUCKET}/source=scraper/date=*/chain=*/"
 TABLE = "workspace.bronze.promotion_items"
+
+# A promotion that lists MORE than this many products in one file is "store-wide" (a basket-level offer such as a
+# coupon or a delivery fee that carries the whole catalog). Measured 2026-11-12: real product deals list at most
+# about 5,200 products, store-wide offers start at about 11,500. Such a promotion is written as ONE row with
+# item NULL; the list is never turned into rows (raw in S3 keeps it). Silver reads it into store_wide_promotions.
+STORE_WIDE_MIN_ITEMS = 10000
 CHECKPOINT = f"{BUCKET}/bronze/_checkpoints/promotion_items"
 
 # COMMAND ----------
@@ -30,7 +36,9 @@ CREATE TABLE IF NOT EXISTS {TABLE} (
   promotion_seq      INT,
   promotion          MAP<STRING, STRING>,
   item               MAP<STRING, STRING>,
-  loaded_at          TIMESTAMP
+  loaded_at          TIMESTAMP,
+  items_in_promotion INT,
+  store_wide         BOOLEAN
 ) USING DELTA
 """)
 
@@ -48,6 +56,8 @@ parsed_schema = StructType([
         StructField("seq", IntegerType()),
         StructField("fields", text_map),
         StructField("items", ArrayType(text_map)),
+        StructField("items_in_promotion", IntegerType()),
+        StructField("store_wide", BooleanType()),
     ]))),
 ])
 
@@ -66,6 +76,13 @@ def flatten_promotion(element, out):
             out[child.tag] = child.text
     return out
 
+def count_items(promotion):
+    # Counted from the tags alone, before any item is turned into a dict, so a huge list costs almost nothing.
+    n = len(promotion.findall("PromotionItems/Item"))
+    for group in promotion.findall("Groups/Group"):
+        n += len(group.findall("PromotionItems/PromotionItem"))
+    return n
+
 def promotion_items(promotion):
     # Two layouts exist, sometimes within one chain:
     #   Groups/Group/PromotionItems/PromotionItem: the discount is on each item.
@@ -79,6 +96,11 @@ def promotion_items(promotion):
         items.append({el.tag: el.text for el in item})
     return items
 
+def parse_promotion(seq, p):
+    n = count_items(p)
+    store_wide = n > STORE_WIDE_MIN_ITEMS
+    return (seq, flatten_promotion(p, {}), [] if store_wide else promotion_items(p), n, store_wide)
+
 def parse_promo_file(content):
     try:
         xml_bytes = gzip.decompress(content)
@@ -86,7 +108,7 @@ def parse_promo_file(content):
         header = {el.tag: el.text for el in root if len(el) == 0}
         container = root.find("Promotions")
         promotions = [
-            (seq, flatten_promotion(p, {}), promotion_items(p))
+            parse_promotion(seq, p)
             for seq, p in enumerate(root.findall("Promotions/Promotion"), start=1)
         ]
         if xml_bytes[:2] in (b"\xff\xfe", b"\xfe\xff"):
@@ -130,7 +152,8 @@ parsed = (raw
         F.explode_outer("parsed.promotions").alias("p"),
     ))
 
-# explode_outer keeps a file with no promotions, and a promotion with no items, as one row.
+# explode_outer keeps a file with no promotions, a promotion with no items, and a store-wide promotion (items
+# emptied above) as one row.
 bronze = parsed.select(
     "file_path", "file_name", "source", "chain", "collected_date", "modified_at",
     "declared_count", "promotions_in_file", "items_in_file", "parse_error", "header",
@@ -138,6 +161,8 @@ bronze = parsed.select(
     F.col("p.fields").alias("promotion"),
     F.explode_outer("p.items").alias("item"),
     F.current_timestamp().alias("loaded_at"),
+    F.col("p.items_in_promotion").alias("items_in_promotion"),
+    F.col("p.store_wide").alias("store_wide"),
 )
 
 (bronze.writeStream

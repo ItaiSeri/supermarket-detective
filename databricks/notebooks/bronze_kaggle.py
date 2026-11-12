@@ -35,6 +35,10 @@ JOB_RUN_ID = dbutils.widgets.get("job_run_id").strip()
 KAGGLE_ROOT = dbutils.widgets.get("kaggle_root").rstrip("/")
 QUEUE = "workspace.ops.backfill_queue"
 
+# A promotion that lists MORE than this many products in one file is "store-wide" (see bronze_promotion_items.py):
+# one bronze row with item NULL, store_wide = true. The count is taken before any item is built.
+STORE_WIDE_MIN_ITEMS = 10000
+
 N_COLS = 64  # the widest header (promotions) has 40 columns
 
 KINDS = {
@@ -279,16 +283,28 @@ parts AS (
     try_variant_get(av, '$.additionalisactive', 'string') AS av_active
   FROM js
 ),
-shaped AS (
+counted AS (
   SELECT *,
     size(g_arr) > 0 AS is_groups,
     CASE
-      WHEN size(g_arr) > 0 THEN {group_items}
+      WHEN size(g_arr) > 0 THEN CAST(aggregate(g_arr, 0L, (acc, gg) -> acc + size({variant_array('gg', '$.promotionitems.promotionitem')})) AS INT)
+      WHEN size(p_arr) > 0 THEN size(p_arr)
+      WHEN itemcode IS NOT NULL THEN 1
+      ELSE 0
+    END AS items_in_promotion
+  FROM parts
+),
+shaped AS (
+  SELECT *,
+    items_in_promotion > {STORE_WIDE_MIN_ITEMS} AS store_wide,
+    CASE
+      WHEN items_in_promotion > {STORE_WIDE_MIN_ITEMS} THEN array()
+      WHEN is_groups THEN {group_items}
       WHEN size(p_arr) > 0 THEN transform(p_arr, it -> {item_map('it')})
       WHEN itemcode IS NOT NULL THEN array(map_filter(map('ItemCode', itemcode, 'ItemType', itemtype, 'IsGiftItem', isgiftitem), (k, x) -> x IS NOT NULL))
       ELSE array()
     END AS items
-  FROM parts
+  FROM counted
 )
 SELECT {COMMON_SELECT},
   CAST(NULL AS STRING) AS declared_count,
@@ -299,7 +315,9 @@ SELECT {COMMON_SELECT},
   CAST(mid - blk + 1 AS INT) AS promotion_seq,
   CASE WHEN is_groups THEN {groups_promo} ELSE {flat_promo} END AS promotion,
   item,
-  current_timestamp() AS loaded_at
+  current_timestamp() AS loaded_at,
+  items_in_promotion,
+  store_wide
 FROM shaped
 LATERAL VIEW OUTER explode(items) lv AS item"""
 
