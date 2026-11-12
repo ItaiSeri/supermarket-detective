@@ -90,7 +90,7 @@ base AS (
     try_cast(trim(b.fields['QtyInPackage']) AS DECIMAL(12,3)) AS qty_in_package,
     trim(b.fields['bIsWeighted']) = '1' AS is_weighted,
     trim(b.fields['AllowDiscount']) = '1' AS allow_discount,
-    try_cast(replace(trim(coalesce(b.fields['PriceUpdateDate'], b.fields['PriceUpdateTime'])), 'T', ' ') AS TIMESTAMP) AS price_updated_at,
+    try_cast(replace(replace(trim(coalesce(b.fields['PriceUpdateDate'], b.fields['PriceUpdateTime'])), 'T', ' '), '/', '-') AS TIMESTAMP) AS price_updated_at,
     to_date(try_to_timestamp(regexp_extract(b.file_name, '-(20[0-9]{6})', 1), 'yyyyMMdd')) AS file_date,
     rpad(regexp_replace(regexp_extract(b.file_name, '-(20[0-9]{6}-?[0-9]{4,6})', 1), '-', ''), 14, '0') AS file_time,
     b.file_path AS source_file,

@@ -21,7 +21,8 @@ WITH parsed AS (
     modified_at,
     file_path
   FROM workspace.bronze.stores
-  WHERE parse_error IS NULL
+  -- the current store list comes from our own collection only; Kaggle store files (history) stay in bronze
+  WHERE parse_error IS NULL AND source = 'scraper'
 ),
 latest AS (
   SELECT *,

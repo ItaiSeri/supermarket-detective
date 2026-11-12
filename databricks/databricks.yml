@@ -74,6 +74,46 @@ resources:
             notebook_path: ./notebooks/ops_run_log.py
             base_parameters:
               job_run_id: "{{job.run_id}}"
+    # Kaggle history backfill (milestone 3): started by hand after a slice has been copied to S3
+    # (state machine supermarket-detective-backfill). No schedule, no trigger. Never run it while
+    # daily_load is running: the Free Edition allows 5 concurrent tasks, and each day's compute stays visible.
+    kaggle_backfill:
+      name: kaggle_backfill
+      max_concurrent_runs: 1
+      tasks:
+        - task_key: load_kaggle_prices
+          notebook_task:
+            notebook_path: ./notebooks/bronze_kaggle.py
+            base_parameters:
+              kind: price
+        - task_key: load_kaggle_stores
+          notebook_task:
+            notebook_path: ./notebooks/bronze_kaggle.py
+            base_parameters:
+              kind: store
+        - task_key: load_kaggle_promotions
+          notebook_task:
+            notebook_path: ./notebooks/bronze_kaggle.py
+            base_parameters:
+              kind: promo
+        - task_key: run_silver
+          depends_on:
+            - task_key: load_kaggle_prices
+            - task_key: load_kaggle_stores
+            - task_key: load_kaggle_promotions
+          run_job_task:
+            job_id: ${resources.jobs.silver_load.id}
+        - task_key: log_run
+          run_if: ALL_DONE
+          depends_on:
+            - task_key: load_kaggle_prices
+            - task_key: load_kaggle_stores
+            - task_key: load_kaggle_promotions
+            - task_key: run_silver
+          notebook_task:
+            notebook_path: ./notebooks/ops_run_log.py
+            base_parameters:
+              job_run_id: "{{job.run_id}}"
     daily_load:
       name: daily_load
       max_concurrent_runs: 1

@@ -23,12 +23,14 @@ I = "workspace.silver.items"
 PO = "workspace.silver.promotion_obs"
 PQ = "workspace.silver.promotion_quarantine"
 
-latest = spark.sql(f"SELECT max(file_date) AS d FROM {P}").first()["d"]
-previous = spark.sql(f"SELECT max(file_date) AS d FROM {P} WHERE file_date < DATE'{latest}'").first()["d"]
-collected = spark.sql(f"SELECT max(collected_date) AS d FROM {P}").first()["d"]
+# The daily checks look at our own collection: Kaggle history rows (source = 'kaggle') are older days and
+# must neither move "the latest day" nor count in the collection checks.
+latest = spark.sql(f"SELECT max(file_date) AS d FROM {P} WHERE source = 'scraper'").first()["d"]
+previous = spark.sql(f"SELECT max(file_date) AS d FROM {P} WHERE source = 'scraper' AND file_date < DATE'{latest}'").first()["d"]
+collected = spark.sql(f"SELECT max(collected_date) AS d FROM {P} WHERE source = 'scraper'").first()["d"]
 run_at = spark.sql("SELECT current_timestamp() AS t").first()["t"]
 
-promo_latest = spark.sql(f"SELECT max(file_date) AS d FROM {PO}").first()["d"]
+promo_latest = spark.sql(f"SELECT max(file_date) AS d FROM {PO} WHERE source = 'scraper'").first()["d"]
 
 day_stores = f"(SELECT DISTINCT chain, store_id FROM {P} WHERE file_date = DATE'{latest}')"
 
@@ -79,6 +81,25 @@ WITH {listed_cte}
 SELECT count(*) FROM (SELECT DISTINCT chain FROM listed) l
 LEFT ANTI JOIN (SELECT DISTINCT chain FROM {P} WHERE file_date = DATE'{latest}') p ON p.chain = l.chain"""
 
+# Kaggle against our scraper: the same source file (same name once ".gz" and ".xml" are removed) must have
+# the same number of rows and the same sum of prices in both. Only files present in both are compared.
+name_of = "regexp_replace(file_name, '([.]gz|[.]xml)+$', '')"
+price_sum = "sum(try_cast(fields['ItemPrice'] AS DECIMAL(18,2)))"
+kaggle_vs_scraper = f"""
+WITH kaggle AS (
+  SELECT {name_of} AS f, file_path, count(*) AS n, {price_sum} AS s
+  FROM workspace.bronze.price_items WHERE source = 'kaggle' AND parse_error IS NULL GROUP BY 1, 2
+),
+scraper AS (
+  SELECT {name_of} AS f, file_path, count(*) AS n, {price_sum} AS s
+  FROM workspace.bronze.price_items
+  WHERE source = 'scraper' AND parse_error IS NULL AND {name_of} IN (SELECT f FROM kaggle)
+  GROUP BY 1, 2
+),
+k AS (SELECT f, max(n) AS n, max(s) AS s FROM kaggle GROUP BY f),
+c AS (SELECT f, max(n) AS n, max(s) AS s FROM scraper GROUP BY f)
+SELECT count_if(k.n <> c.n OR abs(k.s - c.s) > 0.01) FROM k JOIN c ON k.f = c.f"""
+
 # name, level, query returning one number, warn above, fail above, meaning
 checks = [
     ("repeated_keys", "row",
@@ -94,10 +115,10 @@ checks = [
      f"SELECT 100.0 * q.n / (q.n + p.n) FROM (SELECT count(*) AS n FROM {Q} WHERE file_date = DATE'{latest}') q, (SELECT count(*) AS n FROM {P} WHERE file_date = DATE'{latest}') p",
      0.1, 5, "Percent of the latest day's rows that were rejected"),
     ("files_not_readable", "file",
-     f"SELECT count(DISTINCT source_file) FROM {Q} WHERE reject_reason = 'file_not_readable' AND collected_date = DATE'{collected}'",
+     f"SELECT count(DISTINCT source_file) FROM {Q} WHERE reject_reason = 'file_not_readable' AND source = 'scraper' AND collected_date = DATE'{collected}'",
      0, None, "Files from the latest collection that could not be parsed"),
     ("wrong_chain_rows", "file",
-     f"SELECT count(*) FROM {Q} WHERE reject_reason = 'wrong_chain' AND collected_date = DATE'{collected}'",
+     f"SELECT count(*) FROM {Q} WHERE reject_reason = 'wrong_chain' AND source = 'scraper' AND collected_date = DATE'{collected}'",
      0, None, "Rows in a chain's folder that carry another chain's ID"),
     ("stores_without_record", "business",
      f"SELECT count(*) FROM {day_stores} p LEFT ANTI JOIN {S} s ON p.chain = s.chain AND p.store_id = s.store_id",
@@ -129,6 +150,9 @@ checks = [
     ("price_store_completeness", "file",
      completeness_gap,
      0, None, "Chains with more stores missing a price file on the latest date than on a normal recent day (beyond 2 stores or 3% of the chain)"),
+    ("kaggle_vs_scraper_file_mismatch", "file",
+     kaggle_vs_scraper,
+     0, None, "Source files that exist in both Kaggle and our scraper whose row count or price sum differs"),
     ("promotion_repeated_keys", "row",
      f"SELECT count(*) FROM (SELECT 1 FROM {PO} WHERE file_date = DATE'{promo_latest}' GROUP BY chain, store_id, promotion_id, group_id, item_code HAVING count(*) > 1)",
      None, 0, "Same chain, store, promotion, group, product and day appears more than once in promotion_obs"),
