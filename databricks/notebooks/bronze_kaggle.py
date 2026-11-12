@@ -16,25 +16,31 @@
 # Line ends are mixed in these files (CRLF on the header and some rows, LF on the rest), so the reader is
 # told lineSep = LF; otherwise Spark takes the first line's CRLF as the only separator and merges rows.
 # The stray CR then sits at the end of the last cell of a CRLF row and is trimmed.
-# Files already in the bronze table (same file_path) are skipped, so a re-run adds nothing.
+# Queue mode (since 2026-11-12): the files to load are NOT found by listing the whole bucket. The job takes the
+# versions of the batch that task `claim_batch` marked `running` in workspace.ops.backfill_queue, deletes any
+# bronze rows of those versions' date= folders (so a retry after a crash never doubles rows), and loads exactly
+# those folders' files of this kind. Raw lives in the Ohio bucket next to Databricks; bronze is a managed table.
 
 import csv
 
 dbutils.widgets.text("kind", "price")
 dbutils.widgets.text("path_contains", "")  # test only: load just the files whose path contains this text
 dbutils.widgets.text("files_per_write", "30")
+dbutils.widgets.text("job_run_id", "")  # the batch to load: queue rows `running` with this job_run_id; empty = any running batch
+dbutils.widgets.text("kaggle_root", "s3://supermarket-detective-kaggle-971422709739/source=kaggle")
 KIND = dbutils.widgets.get("kind")
 PATH_CONTAINS = dbutils.widgets.get("path_contains").strip()
 FILES_PER_WRITE = int(dbutils.widgets.get("files_per_write"))
+JOB_RUN_ID = dbutils.widgets.get("job_run_id").strip()
+KAGGLE_ROOT = dbutils.widgets.get("kaggle_root").rstrip("/")
+QUEUE = "workspace.ops.backfill_queue"
 
-BUCKET = "s3://supermarket-detective-raw-971422709739"
-SOURCE = f"{BUCKET}/source=kaggle/date=*/chain=*/"
 N_COLS = 64  # the widest header (promotions) has 40 columns
 
 KINDS = {
-    "price": {"pattern": "price_full_file_*.csv.gz", "table": "workspace.bronze.price_items"},
-    "store": {"pattern": "store_file_*.csv.gz", "table": "workspace.bronze.stores"},
-    "promo": {"pattern": "promo_full_file_*.csv.gz", "table": "workspace.bronze.promotion_items"},
+    "price": {"pattern": "price_full_file_*.csv.gz", "table": "workspace.bronze.price_items", "queue_kind": "price_full_file"},
+    "store": {"pattern": "store_file_*.csv.gz", "table": "workspace.bronze.stores", "queue_kind": "store_file"},
+    "promo": {"pattern": "promo_full_file_*.csv.gz", "table": "workspace.bronze.promotion_items", "queue_kind": "promo_full_file"},
 }
 CFG = KINDS[KIND]
 
@@ -315,12 +321,25 @@ def known_keys(kind):
 
 from pyspark.sql import functions as F
 
-files = (spark.read.format("binaryFile").option("pathGlobFilter", CFG["pattern"]).load(SOURCE).select("path"))
-loaded = (spark.table(CFG["table"]).where("source = 'kaggle'").select(F.col("file_path").alias("path")).distinct())
-new_paths = sorted(r.path for r in files.join(loaded, "path", "left_anti").collect())
+# The batch: queue rows that task claim_batch marked running (for this job run), and carry this file kind
+where = "status = 'running'" + (f" AND job_run_id = '{JOB_RUN_ID}'" if JOB_RUN_ID else "")
+batch = [r for r in spark.sql(f"SELECT version, version_date, kinds FROM {QUEUE} WHERE {where} ORDER BY load_order").collect()
+         if CFG["queue_kind"] in r.kinds.split(",")]
+dates = sorted({str(r.version_date) for r in batch})
+print(f"{KIND}: batch of {len(batch)} version(s) with this kind, dates {dates}")
+if not dates:
+    dbutils.notebook.exit("nothing to load")
+
+# Retry safety: remove what an earlier, interrupted attempt of these versions may have written
+in_list = ", ".join(f"DATE'{d}'" for d in dates)
+spark.sql(f"DELETE FROM {CFG['table']} WHERE source = 'kaggle' AND collected_date IN ({in_list})")
+
+patterns = [f"{KAGGLE_ROOT}/date={d}/chain=*/" for d in dates]
+files = (spark.read.format("binaryFile").option("pathGlobFilter", CFG["pattern"]).load(patterns).select("path"))
+new_paths = sorted(r.path for r in files.collect())
 if PATH_CONTAINS:
     new_paths = [p for p in new_paths if PATH_CONTAINS in p]
-print(f"{KIND}: {len(new_paths)} new file(s) to load")
+print(f"{KIND}: {len(new_paths)} file(s) to load")
 if not new_paths:
     dbutils.notebook.exit("nothing to load")
 
