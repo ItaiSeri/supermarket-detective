@@ -10,3 +10,6 @@ powerbi/*.pbix.bak
 *.tfstate.*
 *.tfvars
 *.log
+
+# built Lambda zips (terraform archive_file)
+infra/build/

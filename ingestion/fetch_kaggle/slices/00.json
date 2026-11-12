@@ -1,0 +1,405 @@
+{
+ "note": "slice 00: Hanukkah 2025 version (price+store+promo) and one overlap version (price+store)",
+ "items": [
+  {
+   "version": 405,
+   "date": "2025-12-15",
+   "chain": "HAZI_HINAM",
+   "kind": "price_full_file",
+   "kaggle_path": "price_full_file_hazi_hinam.csv",
+   "size": 42738524
+  },
+  {
+   "version": 405,
+   "date": "2025-12-15",
+   "chain": "HAZI_HINAM",
+   "kind": "promo_full_file",
+   "kaggle_path": "promo_full_file_hazi_hinam.csv",
+   "size": 3080263
+  },
+  {
+   "version": 405,
+   "date": "2025-12-15",
+   "chain": "HAZI_HINAM",
+   "kind": "store_file",
+   "kaggle_path": "store_file_hazi_hinam.csv",
+   "size": 3602
+  },
+  {
+   "version": 405,
+   "date": "2025-12-15",
+   "chain": "KESHET",
+   "kind": "price_full_file",
+   "kaggle_path": "price_full_file_keshet.csv",
+   "size": 95646683
+  },
+  {
+   "version": 405,
+   "date": "2025-12-15",
+   "chain": "KESHET",
+   "kind": "promo_full_file",
+   "kaggle_path": "promo_full_file_keshet.csv",
+   "size": 19686855
+  },
+  {
+   "version": 405,
+   "date": "2025-12-15",
+   "chain": "KESHET",
+   "kind": "store_file",
+   "kaggle_path": "store_file_keshet.csv",
+   "size": 1972
+  },
+  {
+   "version": 405,
+   "date": "2025-12-15",
+   "chain": "MAHSANI_ASHUK_NEW_SOURCE",
+   "kind": "price_full_file",
+   "kaggle_path": "price_full_file_mahsani_ashuk.csv",
+   "size": 68474964
+  },
+  {
+   "version": 405,
+   "date": "2025-12-15",
+   "chain": "MAHSANI_ASHUK_NEW_SOURCE",
+   "kind": "promo_full_file",
+   "kaggle_path": "promo_full_file_mahsani_ashuk.csv",
+   "size": 25096809
+  },
+  {
+   "version": 405,
+   "date": "2025-12-15",
+   "chain": "MAHSANI_ASHUK_NEW_SOURCE",
+   "kind": "store_file",
+   "kaggle_path": "store_file_mahsani_ashuk.csv",
+   "size": 8360
+  },
+  {
+   "version": 405,
+   "date": "2025-12-15",
+   "chain": "OSHER_AD",
+   "kind": "price_full_file",
+   "kaggle_path": "price_full_file_osher_ad.csv",
+   "size": 53781635
+  },
+  {
+   "version": 405,
+   "date": "2025-12-15",
+   "chain": "OSHER_AD",
+   "kind": "promo_full_file",
+   "kaggle_path": "promo_full_file_osher_ad.csv",
+   "size": 8071061
+  },
+  {
+   "version": 405,
+   "date": "2025-12-15",
+   "chain": "OSHER_AD",
+   "kind": "store_file",
+   "kaggle_path": "store_file_osher_ad.csv",
+   "size": 1713
+  },
+  {
+   "version": 405,
+   "date": "2025-12-15",
+   "chain": "RAMI_LEVY",
+   "kind": "price_full_file",
+   "kaggle_path": "price_full_file_rami_levy.csv",
+   "size": 338413850
+  },
+  {
+   "version": 405,
+   "date": "2025-12-15",
+   "chain": "RAMI_LEVY",
+   "kind": "promo_full_file",
+   "kaggle_path": "promo_full_file_rami_levy.csv",
+   "size": 86023132
+  },
+  {
+   "version": 405,
+   "date": "2025-12-15",
+   "chain": "RAMI_LEVY",
+   "kind": "store_file",
+   "kaggle_path": "store_file_rami_levy.csv",
+   "size": 4753
+  },
+  {
+   "version": 405,
+   "date": "2025-12-15",
+   "chain": "SHUFERSAL",
+   "kind": "price_full_file",
+   "kaggle_path": "price_full_file_shufersal.csv",
+   "size": 212514639
+  },
+  {
+   "version": 405,
+   "date": "2025-12-15",
+   "chain": "SHUFERSAL",
+   "kind": "promo_full_file",
+   "kaggle_path": "promo_full_file_shufersal.csv",
+   "size": 59051371
+  },
+  {
+   "version": 405,
+   "date": "2025-12-15",
+   "chain": "SHUFERSAL",
+   "kind": "store_file",
+   "kaggle_path": "store_file_shufersal.csv",
+   "size": 39157
+  },
+  {
+   "version": 405,
+   "date": "2025-12-15",
+   "chain": "TIV_TAAM",
+   "kind": "price_full_file",
+   "kaggle_path": "price_full_file_tiv_taam.csv",
+   "size": 132339310
+  },
+  {
+   "version": 405,
+   "date": "2025-12-15",
+   "chain": "TIV_TAAM",
+   "kind": "promo_full_file",
+   "kaggle_path": "promo_full_file_tiv_taam.csv",
+   "size": 48722057
+  },
+  {
+   "version": 405,
+   "date": "2025-12-15",
+   "chain": "TIV_TAAM",
+   "kind": "store_file",
+   "kaggle_path": "store_file_tiv_taam.csv",
+   "size": 3904
+  },
+  {
+   "version": 405,
+   "date": "2025-12-15",
+   "chain": "VICTORY_NEW_SOURCE",
+   "kind": "price_full_file",
+   "kaggle_path": "price_full_file_victory.csv",
+   "size": 40834440
+  },
+  {
+   "version": 405,
+   "date": "2025-12-15",
+   "chain": "VICTORY_NEW_SOURCE",
+   "kind": "promo_full_file",
+   "kaggle_path": "promo_full_file_victory.csv",
+   "size": 13340594
+  },
+  {
+   "version": 405,
+   "date": "2025-12-15",
+   "chain": "VICTORY_NEW_SOURCE",
+   "kind": "store_file",
+   "kaggle_path": "store_file_victory.csv",
+   "size": 6630
+  },
+  {
+   "version": 405,
+   "date": "2025-12-15",
+   "chain": "YAYNO_BITAN_AND_CARREFOUR",
+   "kind": "price_full_file",
+   "kaggle_path": "price_full_file_yayno_bitan_and_carrefour.csv",
+   "size": 125823581
+  },
+  {
+   "version": 405,
+   "date": "2025-12-15",
+   "chain": "YAYNO_BITAN_AND_CARREFOUR",
+   "kind": "promo_full_file",
+   "kaggle_path": "promo_full_file_yayno_bitan_and_carrefour.csv",
+   "size": 65213371
+  },
+  {
+   "version": 405,
+   "date": "2025-12-15",
+   "chain": "YAYNO_BITAN_AND_CARREFOUR",
+   "kind": "store_file",
+   "kaggle_path": "store_file_yayno_bitan_and_carrefour.csv",
+   "size": 28418
+  },
+  {
+   "version": 405,
+   "date": "2025-12-15",
+   "chain": "YOHANANOF",
+   "kind": "price_full_file",
+   "kaggle_path": "price_full_file_yohananof.csv",
+   "size": 188719967
+  },
+  {
+   "version": 405,
+   "date": "2025-12-15",
+   "chain": "YOHANANOF",
+   "kind": "promo_full_file",
+   "kaggle_path": "promo_full_file_yohananof.csv",
+   "size": 44774458
+  },
+  {
+   "version": 405,
+   "date": "2025-12-15",
+   "chain": "YOHANANOF",
+   "kind": "store_file",
+   "kaggle_path": "store_file_yohananof.csv",
+   "size": 2895
+  },
+  {
+   "version": 720,
+   "date": "2026-11-12",
+   "chain": "HAZI_HINAM",
+   "kind": "price_full_file",
+   "kaggle_path": "hazihinam/price_full_file_hazi_hinam.csv",
+   "size": 66821584
+  },
+  {
+   "version": 720,
+   "date": "2026-11-12",
+   "chain": "HAZI_HINAM",
+   "kind": "store_file",
+   "kaggle_path": "hazihinam/store_file_hazi_hinam.csv",
+   "size": 3432
+  },
+  {
+   "version": 720,
+   "date": "2026-11-12",
+   "chain": "KESHET",
+   "kind": "price_full_file",
+   "kaggle_path": "keshet/price_full_file_keshet.csv",
+   "size": 107282205
+  },
+  {
+   "version": 720,
+   "date": "2026-11-12",
+   "chain": "KESHET",
+   "kind": "store_file",
+   "kaggle_path": "keshet/store_file_keshet.csv",
+   "size": 2008
+  },
+  {
+   "version": 720,
+   "date": "2026-11-12",
+   "chain": "MAHSANI_ASHUK_NEW_SOURCE",
+   "kind": "price_full_file",
+   "kaggle_path": "misc/price_full_file_mahsani_ashuk_new_source.csv",
+   "size": 138604525
+  },
+  {
+   "version": 720,
+   "date": "2026-11-12",
+   "chain": "MAHSANI_ASHUK_NEW_SOURCE",
+   "kind": "store_file",
+   "kaggle_path": "misc/store_file_mahsani_ashuk_new_source.csv",
+   "size": 11884
+  },
+  {
+   "version": 720,
+   "date": "2026-11-12",
+   "chain": "OSHER_AD",
+   "kind": "price_full_file",
+   "kaggle_path": "osherad/price_full_file_osher_ad.csv",
+   "size": 77952000
+  },
+  {
+   "version": 720,
+   "date": "2026-11-12",
+   "chain": "OSHER_AD",
+   "kind": "store_file",
+   "kaggle_path": "osherad/store_file_osher_ad.csv",
+   "size": 1942
+  },
+  {
+   "version": 720,
+   "date": "2026-11-12",
+   "chain": "RAMI_LEVY",
+   "kind": "price_full_file",
+   "kaggle_path": "ramilevy/price_full_file_rami_levy.csv",
+   "size": 822324140
+  },
+  {
+   "version": 720,
+   "date": "2026-11-12",
+   "chain": "RAMI_LEVY",
+   "kind": "store_file",
+   "kaggle_path": "ramilevy/store_file_rami_levy.csv",
+   "size": 6930
+  },
+  {
+   "version": 720,
+   "date": "2026-11-12",
+   "chain": "SHUFERSAL",
+   "kind": "price_full_file",
+   "kaggle_path": "shufersal/price_full_file_shufersal.csv",
+   "size": 786892475
+  },
+  {
+   "version": 720,
+   "date": "2026-11-12",
+   "chain": "SHUFERSAL",
+   "kind": "store_file",
+   "kaggle_path": "shufersal/store_file_shufersal.csv",
+   "size": 33465
+  },
+  {
+   "version": 720,
+   "date": "2026-11-12",
+   "chain": "TIV_TAAM",
+   "kind": "price_full_file",
+   "kaggle_path": "tivtaam/price_full_file_tiv_taam.csv",
+   "size": 198526478
+  },
+  {
+   "version": 720,
+   "date": "2026-11-12",
+   "chain": "TIV_TAAM",
+   "kind": "store_file",
+   "kaggle_path": "tivtaam/store_file_tiv_taam.csv",
+   "size": 4031
+  },
+  {
+   "version": 720,
+   "date": "2026-11-12",
+   "chain": "VICTORY_NEW_SOURCE",
+   "kind": "price_full_file",
+   "kaggle_path": "misc/price_full_file_victory_new_source.csv",
+   "size": 118786751
+  },
+  {
+   "version": 720,
+   "date": "2026-11-12",
+   "chain": "VICTORY_NEW_SOURCE",
+   "kind": "store_file",
+   "kaggle_path": "misc/store_file_victory_new_source.csv",
+   "size": 5170
+  },
+  {
+   "version": 720,
+   "date": "2026-11-12",
+   "chain": "YAYNO_BITAN_AND_CARREFOUR",
+   "kind": "price_full_file",
+   "kaggle_path": "yaynotbitanandcarrefour/price_full_file_yayno_bitan_and_carrefour.csv",
+   "size": 276098347
+  },
+  {
+   "version": 720,
+   "date": "2026-11-12",
+   "chain": "YAYNO_BITAN_AND_CARREFOUR",
+   "kind": "store_file",
+   "kaggle_path": "yaynotbitanandcarrefour/store_file_yayno_bitan_and_carrefour.csv",
+   "size": 27700
+  },
+  {
+   "version": 720,
+   "date": "2026-11-12",
+   "chain": "YOHANANOF",
+   "kind": "price_full_file",
+   "kaggle_path": "yohananof/price_full_file_yohananof.csv",
+   "size": 152670742
+  },
+  {
+   "version": 720,
+   "date": "2026-11-12",
+   "chain": "YOHANANOF",
+   "kind": "store_file",
+   "kaggle_path": "yohananof/store_file_yohananof.csv",
+   "size": 5728
+  }
+ ]
+}
