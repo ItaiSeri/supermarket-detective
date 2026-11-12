@@ -1,0 +1,65 @@
+{
+ "note": "better versions for partial weekly slots; load after the main list",
+ "versions": [
+  {
+   "version": 452,
+   "version_date": "2026-02-01",
+   "load_order": 158,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 1199478464,
+   "replaces_version": 446
+  },
+  {
+   "version": 275,
+   "version_date": "2025-08-03",
+   "load_order": 159,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 18,
+   "raw_bytes": 1208679304,
+   "replaces_version": 271
+  },
+  {
+   "version": 99,
+   "version_date": "2025-02-02",
+   "load_order": 160,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 1186128418,
+   "replaces_version": 93
+  },
+  {
+   "version": 90,
+   "version_date": "2025-01-25",
+   "load_order": 161,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 886246183,
+   "replaces_version": 89
+  },
+  {
+   "version": 86,
+   "version_date": "2025-01-19",
+   "load_order": 162,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 880214598,
+   "replaces_version": 83
+  }
+ ]
+}
