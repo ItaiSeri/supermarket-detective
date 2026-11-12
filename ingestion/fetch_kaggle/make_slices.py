@@ -136,8 +136,10 @@ def cmd_slice00(args):
                 "slice 00: Hanukkah 2025 version (price+store+promo) and one overlap version (price+store)")
 
 
-def cmd_plan(args):
-    dates = one_version_per_date(version_dates(args.latest))
+def build_order(args):
+    """[(version, kinds)] in load order, and version -> date."""
+    all_dates = version_dates(args.latest)
+    dates = one_version_per_date(all_dates)
     last_file_day = dt.date(2026, 11, 8)  # our own collection starts 2026-11-09
     newest_first = sorted(dates.items(), key=lambda x: x[1], reverse=True)
     h25 = [v for v, d in newest_first if dt.date(2025, 11, 23) <= d <= dt.date(2025, 12, 29)]
@@ -153,7 +155,13 @@ def cmd_plan(args):
         week += dt.timedelta(days=7)
     weekly.sort(key=lambda v: dates[v], reverse=True)
     order = [(v, KINDS_ALL) for v in h25 + h24] + [(v, KINDS_PRICE_STORE) for v in weekly]
-    print(f"versions: Hanukkah 2025 {len(h25)}, Hanukkah 2024 {len(h24)}, weekly {len(weekly)}, total {len(order)}")
+    return order, dates, all_dates, (len(h25), len(h24), len(weekly))
+
+
+def cmd_plan(args):
+    order, dates, _, _ = build_order(args)
+    h25, h24, weekly = [0] * 3
+    print(f"versions: total {len(order)}")
     for n in range(0, len(order), args.per_slice):
         items = []
         for v, kinds in order[n:n + args.per_slice]:
@@ -161,6 +169,24 @@ def cmd_plan(args):
         number = n // args.per_slice + 1
         write_slice(f"{args.out_dir}/{number:02d}.json", items,
                     f"slice {number:02d}: versions {[v for v, _ in order[n:n + args.per_slice]]}")
+
+
+def cmd_all(args):
+    """The whole backfill as ONE list: backfill_versions.json (one entry per version, load order, for the
+    Databricks queue) and items.json (a flat JSON array of every file to copy, the Distributed Map's input)."""
+    order, dates, all_dates, counts = build_order(args)
+    order = order + [(720, KINDS_PRICE_STORE)]  # slice-00 overlap version, for the reconciliation with the scraper
+    dates = {**dates, 720: all_dates[720]}
+    versions, items = [], []
+    for n, (v, kinds) in enumerate(order, 1):
+        its = items_for(v, dates[v], kinds, args.cache_dir)
+        items += its
+        versions.append({"version": v, "version_date": dates[v].isoformat(), "load_order": n,
+                         "kinds": kinds, "n_items": len(its), "raw_bytes": sum(i["size"] for i in its)})
+    json.dump({"note": f"Hanukkah 2025 {counts[0]}, Hanukkah 2024 {counts[1]}, weekly {counts[2]}, + overlap v720",
+               "versions": versions}, open(args.versions_out, "w", encoding="utf-8"), indent=1)
+    json.dump(items, open(args.items_out, "w", encoding="utf-8"))
+    print(f"{len(versions)} versions, {len(items)} items, {sum(i['size'] for i in items) / 1e9:.1f} GB raw", counts)
 
 
 if __name__ == "__main__":
@@ -175,5 +201,9 @@ if __name__ == "__main__":
     pl.add_argument("--per-slice", type=int, required=True)
     pl.add_argument("--out-dir", default="slices")
     pl.set_defaults(fn=cmd_plan)
+    al = sub.add_parser("all")
+    al.add_argument("--versions-out", default="backfill_versions.json")
+    al.add_argument("--items-out", default="slices/all_items.json")
+    al.set_defaults(fn=cmd_all)
     a = ap.parse_args()
     a.fn(a)

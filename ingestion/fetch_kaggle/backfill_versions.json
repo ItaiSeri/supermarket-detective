@@ -1,0 +1,1790 @@
+{
+ "note": "Hanukkah 2025 28, Hanukkah 2024 30, weekly 98, + overlap v720",
+ "versions": [
+  {
+   "version": 418,
+   "version_date": "2025-12-29",
+   "load_order": 1,
+   "kinds": [
+    "price_full_file",
+    "store_file",
+    "promo_full_file"
+   ],
+   "n_items": 30,
+   "raw_bytes": 3944620661
+  },
+  {
+   "version": 417,
+   "version_date": "2025-12-27",
+   "load_order": 2,
+   "kinds": [
+    "price_full_file",
+    "store_file",
+    "promo_full_file"
+   ],
+   "n_items": 30,
+   "raw_bytes": 3882342663
+  },
+  {
+   "version": 416,
+   "version_date": "2025-12-26",
+   "load_order": 3,
+   "kinds": [
+    "price_full_file",
+    "store_file",
+    "promo_full_file"
+   ],
+   "n_items": 30,
+   "raw_bytes": 3923512555
+  },
+  {
+   "version": 414,
+   "version_date": "2025-12-23",
+   "load_order": 4,
+   "kinds": [
+    "price_full_file",
+    "store_file",
+    "promo_full_file"
+   ],
+   "n_items": 30,
+   "raw_bytes": 3994270259
+  },
+  {
+   "version": 413,
+   "version_date": "2025-12-22",
+   "load_order": 5,
+   "kinds": [
+    "price_full_file",
+    "store_file",
+    "promo_full_file"
+   ],
+   "n_items": 30,
+   "raw_bytes": 3950952683
+  },
+  {
+   "version": 412,
+   "version_date": "2025-12-21",
+   "load_order": 6,
+   "kinds": [
+    "price_full_file",
+    "store_file",
+    "promo_full_file"
+   ],
+   "n_items": 30,
+   "raw_bytes": 3894446130
+  },
+  {
+   "version": 411,
+   "version_date": "2025-12-20",
+   "load_order": 7,
+   "kinds": [
+    "price_full_file",
+    "store_file",
+    "promo_full_file"
+   ],
+   "n_items": 30,
+   "raw_bytes": 3844712461
+  },
+  {
+   "version": 410,
+   "version_date": "2025-12-19",
+   "load_order": 8,
+   "kinds": [
+    "price_full_file",
+    "store_file",
+    "promo_full_file"
+   ],
+   "n_items": 30,
+   "raw_bytes": 4086497115
+  },
+  {
+   "version": 409,
+   "version_date": "2025-12-18",
+   "load_order": 9,
+   "kinds": [
+    "price_full_file",
+    "store_file",
+    "promo_full_file"
+   ],
+   "n_items": 30,
+   "raw_bytes": 4086696822
+  },
+  {
+   "version": 407,
+   "version_date": "2025-12-17",
+   "load_order": 10,
+   "kinds": [
+    "price_full_file",
+    "store_file",
+    "promo_full_file"
+   ],
+   "n_items": 30,
+   "raw_bytes": 4164216298
+  },
+  {
+   "version": 406,
+   "version_date": "2025-12-15",
+   "load_order": 11,
+   "kinds": [
+    "price_full_file",
+    "store_file",
+    "promo_full_file"
+   ],
+   "n_items": 30,
+   "raw_bytes": 1437622175
+  },
+  {
+   "version": 404,
+   "version_date": "2025-12-13",
+   "load_order": 12,
+   "kinds": [
+    "price_full_file",
+    "store_file",
+    "promo_full_file"
+   ],
+   "n_items": 30,
+   "raw_bytes": 1398632966
+  },
+  {
+   "version": 403,
+   "version_date": "2025-12-11",
+   "load_order": 13,
+   "kinds": [
+    "price_full_file",
+    "store_file",
+    "promo_full_file"
+   ],
+   "n_items": 29,
+   "raw_bytes": 1453755703
+  },
+  {
+   "version": 402,
+   "version_date": "2025-12-10",
+   "load_order": 14,
+   "kinds": [
+    "price_full_file",
+    "store_file",
+    "promo_full_file"
+   ],
+   "n_items": 30,
+   "raw_bytes": 1390898821
+  },
+  {
+   "version": 401,
+   "version_date": "2025-12-09",
+   "load_order": 15,
+   "kinds": [
+    "price_full_file",
+    "store_file",
+    "promo_full_file"
+   ],
+   "n_items": 30,
+   "raw_bytes": 1392842994
+  },
+  {
+   "version": 400,
+   "version_date": "2025-12-06",
+   "load_order": 16,
+   "kinds": [
+    "price_full_file",
+    "store_file",
+    "promo_full_file"
+   ],
+   "n_items": 30,
+   "raw_bytes": 1257574290
+  },
+  {
+   "version": 399,
+   "version_date": "2025-12-05",
+   "load_order": 17,
+   "kinds": [
+    "price_full_file",
+    "store_file",
+    "promo_full_file"
+   ],
+   "n_items": 30,
+   "raw_bytes": 1445028232
+  },
+  {
+   "version": 397,
+   "version_date": "2025-12-03",
+   "load_order": 18,
+   "kinds": [
+    "price_full_file",
+    "store_file",
+    "promo_full_file"
+   ],
+   "n_items": 30,
+   "raw_bytes": 1321669911
+  },
+  {
+   "version": 396,
+   "version_date": "2025-12-02",
+   "load_order": 19,
+   "kinds": [
+    "price_full_file",
+    "store_file",
+    "promo_full_file"
+   ],
+   "n_items": 30,
+   "raw_bytes": 1348781957
+  },
+  {
+   "version": 395,
+   "version_date": "2025-12-01",
+   "load_order": 20,
+   "kinds": [
+    "price_full_file",
+    "store_file",
+    "promo_full_file"
+   ],
+   "n_items": 30,
+   "raw_bytes": 1331976089
+  },
+  {
+   "version": 394,
+   "version_date": "2025-11-30",
+   "load_order": 21,
+   "kinds": [
+    "price_full_file",
+    "store_file",
+    "promo_full_file"
+   ],
+   "n_items": 30,
+   "raw_bytes": 1302046420
+  },
+  {
+   "version": 393,
+   "version_date": "2025-11-29",
+   "load_order": 22,
+   "kinds": [
+    "price_full_file",
+    "store_file",
+    "promo_full_file"
+   ],
+   "n_items": 30,
+   "raw_bytes": 1264198731
+  },
+  {
+   "version": 392,
+   "version_date": "2025-11-28",
+   "load_order": 23,
+   "kinds": [
+    "price_full_file",
+    "store_file",
+    "promo_full_file"
+   ],
+   "n_items": 29,
+   "raw_bytes": 1323285829
+  },
+  {
+   "version": 391,
+   "version_date": "2025-11-27",
+   "load_order": 24,
+   "kinds": [
+    "price_full_file",
+    "store_file",
+    "promo_full_file"
+   ],
+   "n_items": 30,
+   "raw_bytes": 1337111519
+  },
+  {
+   "version": 390,
+   "version_date": "2025-11-26",
+   "load_order": 25,
+   "kinds": [
+    "price_full_file",
+    "store_file",
+    "promo_full_file"
+   ],
+   "n_items": 30,
+   "raw_bytes": 1369038189
+  },
+  {
+   "version": 389,
+   "version_date": "2025-11-25",
+   "load_order": 26,
+   "kinds": [
+    "price_full_file",
+    "store_file",
+    "promo_full_file"
+   ],
+   "n_items": 30,
+   "raw_bytes": 1358545848
+  },
+  {
+   "version": 388,
+   "version_date": "2025-11-24",
+   "load_order": 27,
+   "kinds": [
+    "price_full_file",
+    "store_file",
+    "promo_full_file"
+   ],
+   "n_items": 30,
+   "raw_bytes": 1343652943
+  },
+  {
+   "version": 387,
+   "version_date": "2025-11-23",
+   "load_order": 28,
+   "kinds": [
+    "price_full_file",
+    "store_file",
+    "promo_full_file"
+   ],
+   "n_items": 29,
+   "raw_bytes": 1344947388
+  },
+  {
+   "version": 79,
+   "version_date": "2025-01-06",
+   "load_order": 29,
+   "kinds": [
+    "price_full_file",
+    "store_file",
+    "promo_full_file"
+   ],
+   "n_items": 30,
+   "raw_bytes": 1061881589
+  },
+  {
+   "version": 78,
+   "version_date": "2025-01-05",
+   "load_order": 30,
+   "kinds": [
+    "price_full_file",
+    "store_file",
+    "promo_full_file"
+   ],
+   "n_items": 30,
+   "raw_bytes": 1059290729
+  },
+  {
+   "version": 77,
+   "version_date": "2025-01-04",
+   "load_order": 31,
+   "kinds": [
+    "price_full_file",
+    "store_file",
+    "promo_full_file"
+   ],
+   "n_items": 30,
+   "raw_bytes": 1121342861
+  },
+  {
+   "version": 76,
+   "version_date": "2025-01-02",
+   "load_order": 32,
+   "kinds": [
+    "price_full_file",
+    "store_file",
+    "promo_full_file"
+   ],
+   "n_items": 30,
+   "raw_bytes": 1128673256
+  },
+  {
+   "version": 75,
+   "version_date": "2025-01-01",
+   "load_order": 33,
+   "kinds": [
+    "price_full_file",
+    "store_file",
+    "promo_full_file"
+   ],
+   "n_items": 30,
+   "raw_bytes": 1159718844
+  },
+  {
+   "version": 74,
+   "version_date": "2024-12-31",
+   "load_order": 34,
+   "kinds": [
+    "price_full_file",
+    "store_file",
+    "promo_full_file"
+   ],
+   "n_items": 30,
+   "raw_bytes": 1145780659
+  },
+  {
+   "version": 73,
+   "version_date": "2024-12-30",
+   "load_order": 35,
+   "kinds": [
+    "price_full_file",
+    "store_file",
+    "promo_full_file"
+   ],
+   "n_items": 30,
+   "raw_bytes": 1127930111
+  },
+  {
+   "version": 72,
+   "version_date": "2024-12-29",
+   "load_order": 36,
+   "kinds": [
+    "price_full_file",
+    "store_file",
+    "promo_full_file"
+   ],
+   "n_items": 30,
+   "raw_bytes": 1088591570
+  },
+  {
+   "version": 71,
+   "version_date": "2024-12-28",
+   "load_order": 37,
+   "kinds": [
+    "price_full_file",
+    "store_file",
+    "promo_full_file"
+   ],
+   "n_items": 30,
+   "raw_bytes": 1161335912
+  },
+  {
+   "version": 70,
+   "version_date": "2024-12-27",
+   "load_order": 38,
+   "kinds": [
+    "price_full_file",
+    "store_file",
+    "promo_full_file"
+   ],
+   "n_items": 30,
+   "raw_bytes": 1149567745
+  },
+  {
+   "version": 69,
+   "version_date": "2024-12-26",
+   "load_order": 39,
+   "kinds": [
+    "price_full_file",
+    "store_file",
+    "promo_full_file"
+   ],
+   "n_items": 30,
+   "raw_bytes": 1158099806
+  },
+  {
+   "version": 68,
+   "version_date": "2024-12-25",
+   "load_order": 40,
+   "kinds": [
+    "price_full_file",
+    "store_file",
+    "promo_full_file"
+   ],
+   "n_items": 30,
+   "raw_bytes": 1153394407
+  },
+  {
+   "version": 67,
+   "version_date": "2024-12-24",
+   "load_order": 41,
+   "kinds": [
+    "price_full_file",
+    "store_file",
+    "promo_full_file"
+   ],
+   "n_items": 30,
+   "raw_bytes": 1213925407
+  },
+  {
+   "version": 66,
+   "version_date": "2024-12-23",
+   "load_order": 42,
+   "kinds": [
+    "price_full_file",
+    "store_file",
+    "promo_full_file"
+   ],
+   "n_items": 30,
+   "raw_bytes": 1232990528
+  },
+  {
+   "version": 65,
+   "version_date": "2024-12-22",
+   "load_order": 43,
+   "kinds": [
+    "price_full_file",
+    "store_file",
+    "promo_full_file"
+   ],
+   "n_items": 30,
+   "raw_bytes": 1164285020
+  },
+  {
+   "version": 64,
+   "version_date": "2024-12-21",
+   "load_order": 44,
+   "kinds": [
+    "price_full_file",
+    "store_file",
+    "promo_full_file"
+   ],
+   "n_items": 30,
+   "raw_bytes": 1226016712
+  },
+  {
+   "version": 63,
+   "version_date": "2024-12-18",
+   "load_order": 45,
+   "kinds": [
+    "price_full_file",
+    "store_file",
+    "promo_full_file"
+   ],
+   "n_items": 30,
+   "raw_bytes": 1236197672
+  },
+  {
+   "version": 62,
+   "version_date": "2024-12-17",
+   "load_order": 46,
+   "kinds": [
+    "price_full_file",
+    "store_file",
+    "promo_full_file"
+   ],
+   "n_items": 30,
+   "raw_bytes": 1225411378
+  },
+  {
+   "version": 61,
+   "version_date": "2024-12-16",
+   "load_order": 47,
+   "kinds": [
+    "price_full_file",
+    "store_file",
+    "promo_full_file"
+   ],
+   "n_items": 29,
+   "raw_bytes": 1203971043
+  },
+  {
+   "version": 60,
+   "version_date": "2024-12-15",
+   "load_order": 48,
+   "kinds": [
+    "price_full_file",
+    "store_file",
+    "promo_full_file"
+   ],
+   "n_items": 27,
+   "raw_bytes": 1169623742
+  },
+  {
+   "version": 59,
+   "version_date": "2024-12-14",
+   "load_order": 49,
+   "kinds": [
+    "price_full_file",
+    "store_file",
+    "promo_full_file"
+   ],
+   "n_items": 27,
+   "raw_bytes": 1234979233
+  },
+  {
+   "version": 58,
+   "version_date": "2024-12-12",
+   "load_order": 50,
+   "kinds": [
+    "price_full_file",
+    "store_file",
+    "promo_full_file"
+   ],
+   "n_items": 26,
+   "raw_bytes": 1115468528
+  },
+  {
+   "version": 57,
+   "version_date": "2024-12-11",
+   "load_order": 51,
+   "kinds": [
+    "price_full_file",
+    "store_file",
+    "promo_full_file"
+   ],
+   "n_items": 26,
+   "raw_bytes": 1121155802
+  },
+  {
+   "version": 56,
+   "version_date": "2024-12-10",
+   "load_order": 52,
+   "kinds": [
+    "price_full_file",
+    "store_file",
+    "promo_full_file"
+   ],
+   "n_items": 26,
+   "raw_bytes": 1115361534
+  },
+  {
+   "version": 55,
+   "version_date": "2024-12-09",
+   "load_order": 53,
+   "kinds": [
+    "price_full_file",
+    "store_file",
+    "promo_full_file"
+   ],
+   "n_items": 26,
+   "raw_bytes": 1111361419
+  },
+  {
+   "version": 54,
+   "version_date": "2024-12-08",
+   "load_order": 54,
+   "kinds": [
+    "price_full_file",
+    "store_file",
+    "promo_full_file"
+   ],
+   "n_items": 26,
+   "raw_bytes": 1054461193
+  },
+  {
+   "version": 53,
+   "version_date": "2024-12-07",
+   "load_order": 55,
+   "kinds": [
+    "price_full_file",
+    "store_file",
+    "promo_full_file"
+   ],
+   "n_items": 26,
+   "raw_bytes": 1104638258
+  },
+  {
+   "version": 52,
+   "version_date": "2024-12-06",
+   "load_order": 56,
+   "kinds": [
+    "price_full_file",
+    "store_file",
+    "promo_full_file"
+   ],
+   "n_items": 26,
+   "raw_bytes": 1097579139
+  },
+  {
+   "version": 51,
+   "version_date": "2024-12-05",
+   "load_order": 57,
+   "kinds": [
+    "price_full_file",
+    "store_file",
+    "promo_full_file"
+   ],
+   "n_items": 26,
+   "raw_bytes": 1096670180
+  },
+  {
+   "version": 50,
+   "version_date": "2024-12-04",
+   "load_order": 58,
+   "kinds": [
+    "price_full_file",
+    "store_file",
+    "promo_full_file"
+   ],
+   "n_items": 26,
+   "raw_bytes": 1089919313
+  },
+  {
+   "version": 711,
+   "version_date": "2026-11-03",
+   "load_order": 59,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 2351950854
+  },
+  {
+   "version": 705,
+   "version_date": "2026-10-27",
+   "load_order": 60,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 2426002842
+  },
+  {
+   "version": 699,
+   "version_date": "2026-10-20",
+   "load_order": 61,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 2884699831
+  },
+  {
+   "version": 691,
+   "version_date": "2026-10-13",
+   "load_order": 62,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 2915237020
+  },
+  {
+   "version": 684,
+   "version_date": "2026-10-06",
+   "load_order": 63,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 2251493922
+  },
+  {
+   "version": 677,
+   "version_date": "2026-09-29",
+   "load_order": 64,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 1790177877
+  },
+  {
+   "version": 670,
+   "version_date": "2026-09-22",
+   "load_order": 65,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 2383698940
+  },
+  {
+   "version": 663,
+   "version_date": "2026-09-15",
+   "load_order": 66,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 2711686379
+  },
+  {
+   "version": 656,
+   "version_date": "2026-09-08",
+   "load_order": 67,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 2368935960
+  },
+  {
+   "version": 649,
+   "version_date": "2026-09-01",
+   "load_order": 68,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 2693049161
+  },
+  {
+   "version": 642,
+   "version_date": "2026-08-25",
+   "load_order": 69,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 1942266575
+  },
+  {
+   "version": 635,
+   "version_date": "2026-08-18",
+   "load_order": 70,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 1945270169
+  },
+  {
+   "version": 631,
+   "version_date": "2026-08-11",
+   "load_order": 71,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 2328266048
+  },
+  {
+   "version": 626,
+   "version_date": "2026-08-05",
+   "load_order": 72,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 2158235588
+  },
+  {
+   "version": 624,
+   "version_date": "2026-07-29",
+   "load_order": 73,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 2714434803
+  },
+  {
+   "version": 618,
+   "version_date": "2026-07-21",
+   "load_order": 74,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 2681263864
+  },
+  {
+   "version": 611,
+   "version_date": "2026-07-14",
+   "load_order": 75,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 2777327606
+  },
+  {
+   "version": 604,
+   "version_date": "2026-07-07",
+   "load_order": 76,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 1869949422
+  },
+  {
+   "version": 598,
+   "version_date": "2026-06-30",
+   "load_order": 77,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 2773389969
+  },
+  {
+   "version": 591,
+   "version_date": "2026-06-23",
+   "load_order": 78,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 2702133251
+  },
+  {
+   "version": 584,
+   "version_date": "2026-06-16",
+   "load_order": 79,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 3525594534
+  },
+  {
+   "version": 577,
+   "version_date": "2026-06-09",
+   "load_order": 80,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 1894343301
+  },
+  {
+   "version": 570,
+   "version_date": "2026-06-02",
+   "load_order": 81,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 19,
+   "raw_bytes": 1486737579
+  },
+  {
+   "version": 563,
+   "version_date": "2026-05-26",
+   "load_order": 82,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 1824132794
+  },
+  {
+   "version": 556,
+   "version_date": "2026-05-19",
+   "load_order": 83,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 2183587710
+  },
+  {
+   "version": 549,
+   "version_date": "2026-05-12",
+   "load_order": 84,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 1692041187
+  },
+  {
+   "version": 542,
+   "version_date": "2026-05-05",
+   "load_order": 85,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 1662463876
+  },
+  {
+   "version": 535,
+   "version_date": "2026-04-28",
+   "load_order": 86,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 1141878377
+  },
+  {
+   "version": 528,
+   "version_date": "2026-04-21",
+   "load_order": 87,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 1180216255
+  },
+  {
+   "version": 521,
+   "version_date": "2026-04-14",
+   "load_order": 88,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 1127469847
+  },
+  {
+   "version": 515,
+   "version_date": "2026-04-07",
+   "load_order": 89,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 1035860886
+  },
+  {
+   "version": 508,
+   "version_date": "2026-03-31",
+   "load_order": 90,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 1202164993
+  },
+  {
+   "version": 501,
+   "version_date": "2026-03-24",
+   "load_order": 91,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 19,
+   "raw_bytes": 1215652087
+  },
+  {
+   "version": 494,
+   "version_date": "2026-03-17",
+   "load_order": 92,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 18,
+   "raw_bytes": 1217169856
+  },
+  {
+   "version": 488,
+   "version_date": "2026-03-10",
+   "load_order": 93,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 19,
+   "raw_bytes": 1329287003
+  },
+  {
+   "version": 481,
+   "version_date": "2026-03-04",
+   "load_order": 94,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 19,
+   "raw_bytes": 2407409652
+  },
+  {
+   "version": 474,
+   "version_date": "2026-02-24",
+   "load_order": 95,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 19,
+   "raw_bytes": 1194549887
+  },
+  {
+   "version": 467,
+   "version_date": "2026-02-17",
+   "load_order": 96,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 2047865184
+  },
+  {
+   "version": 460,
+   "version_date": "2026-02-10",
+   "load_order": 97,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 1196844157
+  },
+  {
+   "version": 453,
+   "version_date": "2026-02-03",
+   "load_order": 98,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 1205627747
+  },
+  {
+   "version": 446,
+   "version_date": "2026-01-27",
+   "load_order": 99,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 18,
+   "raw_bytes": 1025199196
+  },
+  {
+   "version": 439,
+   "version_date": "2026-01-20",
+   "load_order": 100,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 1217361536
+  },
+  {
+   "version": 432,
+   "version_date": "2026-01-13",
+   "load_order": 101,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 1199997121
+  },
+  {
+   "version": 426,
+   "version_date": "2026-01-07",
+   "load_order": 102,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 19,
+   "raw_bytes": 1103613491
+  },
+  {
+   "version": 419,
+   "version_date": "2025-12-30",
+   "load_order": 103,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 1039800430
+  },
+  {
+   "version": 383,
+   "version_date": "2025-11-19",
+   "load_order": 104,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 1054196103
+  },
+  {
+   "version": 375,
+   "version_date": "2025-11-11",
+   "load_order": 105,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 1035467291
+  },
+  {
+   "version": 368,
+   "version_date": "2025-11-04",
+   "load_order": 106,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 1040718406
+  },
+  {
+   "version": 362,
+   "version_date": "2025-10-29",
+   "load_order": 107,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 1047068774
+  },
+  {
+   "version": 353,
+   "version_date": "2025-10-21",
+   "load_order": 108,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 1195422913
+  },
+  {
+   "version": 346,
+   "version_date": "2025-10-14",
+   "load_order": 109,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 1154309123
+  },
+  {
+   "version": 339,
+   "version_date": "2025-10-07",
+   "load_order": 110,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 1188572237
+  },
+  {
+   "version": 332,
+   "version_date": "2025-09-30",
+   "load_order": 111,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 1241655257
+  },
+  {
+   "version": 325,
+   "version_date": "2025-09-23",
+   "load_order": 112,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 1314783429
+  },
+  {
+   "version": 318,
+   "version_date": "2025-09-16",
+   "load_order": 113,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 1287079147
+  },
+  {
+   "version": 312,
+   "version_date": "2025-09-09",
+   "load_order": 114,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 1166335430
+  },
+  {
+   "version": 305,
+   "version_date": "2025-09-02",
+   "load_order": 115,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 1269523166
+  },
+  {
+   "version": 298,
+   "version_date": "2025-08-26",
+   "load_order": 116,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 1276641365
+  },
+  {
+   "version": 291,
+   "version_date": "2025-08-19",
+   "load_order": 117,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 1269249481
+  },
+  {
+   "version": 284,
+   "version_date": "2025-08-12",
+   "load_order": 118,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 1298296835
+  },
+  {
+   "version": 277,
+   "version_date": "2025-08-05",
+   "load_order": 119,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 19,
+   "raw_bytes": 1317618494
+  },
+  {
+   "version": 271,
+   "version_date": "2025-07-29",
+   "load_order": 120,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 1,
+   "raw_bytes": 27504309
+  },
+  {
+   "version": 264,
+   "version_date": "2025-07-22",
+   "load_order": 121,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 19,
+   "raw_bytes": 1285719024
+  },
+  {
+   "version": 257,
+   "version_date": "2025-07-15",
+   "load_order": 122,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 1258275598
+  },
+  {
+   "version": 250,
+   "version_date": "2025-07-08",
+   "load_order": 123,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 19,
+   "raw_bytes": 1107600314
+  },
+  {
+   "version": 243,
+   "version_date": "2025-07-01",
+   "load_order": 124,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 1655693149
+  },
+  {
+   "version": 236,
+   "version_date": "2025-06-24",
+   "load_order": 125,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 1127674766
+  },
+  {
+   "version": 231,
+   "version_date": "2025-06-18",
+   "load_order": 126,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 1196534754
+  },
+  {
+   "version": 224,
+   "version_date": "2025-06-10",
+   "load_order": 127,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 1116185173
+  },
+  {
+   "version": 217,
+   "version_date": "2025-06-03",
+   "load_order": 128,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 1154016903
+  },
+  {
+   "version": 210,
+   "version_date": "2025-05-27",
+   "load_order": 129,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 1210310040
+  },
+  {
+   "version": 204,
+   "version_date": "2025-05-20",
+   "load_order": 130,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 19,
+   "raw_bytes": 1165225007
+  },
+  {
+   "version": 197,
+   "version_date": "2025-05-13",
+   "load_order": 131,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 1151620826
+  },
+  {
+   "version": 190,
+   "version_date": "2025-05-06",
+   "load_order": 132,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 1104206645
+  },
+  {
+   "version": 183,
+   "version_date": "2025-04-29",
+   "load_order": 133,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 1115144997
+  },
+  {
+   "version": 176,
+   "version_date": "2025-04-22",
+   "load_order": 134,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 936717906
+  },
+  {
+   "version": 169,
+   "version_date": "2025-04-15",
+   "load_order": 135,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 1017183661
+  },
+  {
+   "version": 162,
+   "version_date": "2025-04-08",
+   "load_order": 136,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 1129768341
+  },
+  {
+   "version": 155,
+   "version_date": "2025-04-01",
+   "load_order": 137,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 1122504899
+  },
+  {
+   "version": 150,
+   "version_date": "2025-03-25",
+   "load_order": 138,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 927953900
+  },
+  {
+   "version": 143,
+   "version_date": "2025-03-18",
+   "load_order": 139,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 19,
+   "raw_bytes": 944103344
+  },
+  {
+   "version": 135,
+   "version_date": "2025-03-11",
+   "load_order": 140,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 19,
+   "raw_bytes": 941188794
+  },
+  {
+   "version": 129,
+   "version_date": "2025-03-04",
+   "load_order": 141,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 966970992
+  },
+  {
+   "version": 123,
+   "version_date": "2025-02-26",
+   "load_order": 142,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 19,
+   "raw_bytes": 981547929
+  },
+  {
+   "version": 115,
+   "version_date": "2025-02-18",
+   "load_order": 143,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 940157328
+  },
+  {
+   "version": 108,
+   "version_date": "2025-02-11",
+   "load_order": 144,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 896342712
+  },
+  {
+   "version": 101,
+   "version_date": "2025-02-04",
+   "load_order": 145,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 1222033698
+  },
+  {
+   "version": 93,
+   "version_date": "2025-01-28",
+   "load_order": 146,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 9,
+   "raw_bytes": 199924366
+  },
+  {
+   "version": 89,
+   "version_date": "2025-01-22",
+   "load_order": 147,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 9,
+   "raw_bytes": 20795636
+  },
+  {
+   "version": 83,
+   "version_date": "2025-01-16",
+   "load_order": 148,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 9,
+   "raw_bytes": 21375898
+  },
+  {
+   "version": 81,
+   "version_date": "2025-01-12",
+   "load_order": 149,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 9,
+   "raw_bytes": 21303870
+  },
+  {
+   "version": 49,
+   "version_date": "2024-12-03",
+   "load_order": 150,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 17,
+   "raw_bytes": 883450529
+  },
+  {
+   "version": 42,
+   "version_date": "2024-11-26",
+   "load_order": 151,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 17,
+   "raw_bytes": 873158146
+  },
+  {
+   "version": 35,
+   "version_date": "2024-11-19",
+   "load_order": 152,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 19,
+   "raw_bytes": 1001986852
+  },
+  {
+   "version": 28,
+   "version_date": "2024-11-12",
+   "load_order": 153,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 19,
+   "raw_bytes": 993910403
+  },
+  {
+   "version": 24,
+   "version_date": "2024-11-06",
+   "load_order": 154,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 19,
+   "raw_bytes": 988810933
+  },
+  {
+   "version": 21,
+   "version_date": "2024-10-31",
+   "load_order": 155,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 19,
+   "raw_bytes": 965497445
+  },
+  {
+   "version": 14,
+   "version_date": "2024-10-22",
+   "load_order": 156,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 19,
+   "raw_bytes": 999255780
+  },
+  {
+   "version": 720,
+   "version_date": "2026-11-12",
+   "load_order": 157,
+   "kinds": [
+    "price_full_file",
+    "store_file"
+   ],
+   "n_items": 20,
+   "raw_bytes": 2746061537
+  }
+ ]
+}

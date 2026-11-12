@@ -23,11 +23,11 @@ resource "aws_iam_role_policy_attachment" "fetch_kaggle_logs" {
 data "aws_iam_policy_document" "fetch_kaggle_s3" {
   statement {
     actions   = ["s3:PutObject", "s3:AbortMultipartUpload"]
-    resources = ["${aws_s3_bucket.raw.arn}/source=kaggle/*"]
+    resources = ["${aws_s3_bucket.kaggle.arn}/source=kaggle/*"]
   }
   statement {
     actions   = ["s3:GetObject"]
-    resources = ["${aws_s3_bucket.raw.arn}/source=kaggle/*"]
+    resources = ["${aws_s3_bucket.kaggle.arn}/source=kaggle/*"]
   }
 }
 
@@ -38,11 +38,13 @@ resource "aws_iam_role_policy" "fetch_kaggle_s3" {
 }
 
 resource "aws_cloudwatch_log_group" "fetch_kaggle" {
+  provider          = aws.ohio
   name              = "/aws/lambda/supermarket-detective-fetch-kaggle"
   retention_in_days = 30
 }
 
 resource "aws_lambda_function" "fetch_kaggle" {
+  provider         = aws.ohio
   function_name    = "supermarket-detective-fetch-kaggle"
   role             = aws_iam_role.fetch_kaggle.arn
   runtime          = "python3.12"
@@ -60,7 +62,7 @@ resource "aws_lambda_function" "fetch_kaggle" {
 
   environment {
     variables = {
-      RAW_BUCKET = aws_s3_bucket.raw.bucket
+      RAW_BUCKET = aws_s3_bucket.kaggle.bucket
     }
   }
 
@@ -89,7 +91,39 @@ resource "aws_iam_role_policy" "backfill_invoke" {
   policy = data.aws_iam_policy_document.backfill_invoke.json
 }
 
+# role extras for the Distributed Map: read the item list, write the result files, start its own child executions
+data "aws_iam_policy_document" "backfill_map" {
+  statement {
+    actions   = ["s3:GetObject"]
+    resources = ["${aws_s3_bucket.kaggle.arn}/_backfill/*"]
+  }
+  statement {
+    actions   = ["s3:ListBucket"]
+    resources = [aws_s3_bucket.kaggle.arn]
+  }
+  statement {
+    actions   = ["s3:PutObject", "s3:AbortMultipartUpload"]
+    resources = ["${aws_s3_bucket.kaggle.arn}/_backfill_results/*"]
+  }
+  statement {
+    actions   = ["states:StartExecution"]
+    resources = ["arn:aws:states:us-east-2:${data.aws_caller_identity.current.account_id}:stateMachine:supermarket-detective-backfill"]
+  }
+  statement {
+    actions   = ["states:DescribeExecution", "states:StopExecution"]
+    resources = ["arn:aws:states:us-east-2:${data.aws_caller_identity.current.account_id}:execution:supermarket-detective-backfill/*"]
+  }
+}
+
+resource "aws_iam_role_policy" "backfill_map" {
+  name   = "distributed-map"
+  role   = aws_iam_role.backfill.id
+  policy = data.aws_iam_policy_document.backfill_map.json
+}
+
+# Input: {"items_key": "_backfill/items.json"}  (a JSON array of items in the Kaggle bucket)
 resource "aws_sfn_state_machine" "backfill" {
+  provider = aws.ohio
   name     = "supermarket-detective-backfill"
   role_arn = aws_iam_role.backfill.arn
 
@@ -98,11 +132,21 @@ resource "aws_sfn_state_machine" "backfill" {
     StartAt       = "CopyAll"
     States = {
       CopyAll = {
-        Type           = "Map"
-        Items          = "{% $states.input.items %}"
-        MaxConcurrency = 5
+        Type = "Map"
+        ItemReader = {
+          Resource = "arn:aws:states:::s3:getObject"
+          ReaderConfig = {
+            InputType = "JSON"
+          }
+          Arguments = {
+            Bucket = aws_s3_bucket.kaggle.bucket
+            Key    = "{% $states.input.items_key %}"
+          }
+        }
+        MaxConcurrency             = 10
+        ToleratedFailurePercentage = 100 # failed items are listed in the results; the end state reports them
         ItemProcessor = {
-          ProcessorConfig = { Mode = "INLINE" }
+          ProcessorConfig = { Mode = "DISTRIBUTED", ExecutionType = "STANDARD" }
           StartAt         = "CopyFile"
           States = {
             CopyFile = {
@@ -112,8 +156,7 @@ resource "aws_sfn_state_machine" "backfill" {
                 FunctionName = aws_lambda_function.fetch_kaggle.arn
                 Payload      = "{% $states.input %}"
               }
-              # keep only the short facts of each copy, not the whole payload
-              Output = "{% {'status': $states.result.Payload.status, 'version': $states.result.Payload.version, 'chain': $states.result.Payload.chain, 'kind': $states.result.Payload.kind, 'kaggle_listed_bytes': $states.result.Payload.kaggle_listed_bytes, 's3_bytes': $states.result.Payload.s3_bytes, 'secs': $states.result.Payload.secs, 'skipped': $states.result.Payload.skipped} %}"
+              Output = "{% {'status': $states.result.Payload.status, 'version': $states.result.Payload.version, 'chain': $states.result.Payload.chain, 'kind': $states.result.Payload.kind, 's3_bytes': $states.result.Payload.s3_bytes, 'skipped': $states.result.Payload.skipped} %}"
               # Kaggle may rate-limit or drop a download: wait 1, then 2, then 4 minutes
               Retry = [{
                 ErrorEquals     = ["States.ALL"]
@@ -131,26 +174,15 @@ resource "aws_sfn_state_machine" "backfill" {
             ItemFailed = { Type = "Pass", End = true }
           }
         }
-        Assign = {
-          failed = "{% $count($states.result[status = 'failed']) %}"
+        ResultWriter = {
+          Resource = "arn:aws:states:::s3:putObject"
+          Arguments = {
+            Bucket = aws_s3_bucket.kaggle.bucket
+            Prefix = "_backfill_results"
+          }
         }
-        Output = "{% {'copied': $count($states.result[status = 'ok']), 'failed': $count($states.result[status = 'failed']), 'items': $states.result} %}"
-        Next   = "CheckResults"
+        End = true
       }
-      CheckResults = {
-        Type = "Choice"
-        Choices = [{
-          Condition = "{% $failed > 0 %}"
-          Next      = "SomeFailed"
-        }]
-        Default = "AllOk"
-      }
-      SomeFailed = {
-        Type  = "Fail"
-        Error = "SomeFilesFailed"
-        Cause = "At least one Kaggle file failed after its retries; see the Map results. Rerunning the same slice skips files that already have a manifest."
-      }
-      AllOk = { Type = "Succeed" }
     }
   })
 }

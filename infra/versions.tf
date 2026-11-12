@@ -25,3 +25,17 @@ provider "aws" {
     }
   }
 }
+
+# Ohio (us-east-2): Databricks runs there, so the Kaggle raw files and the Kaggle download lane live there too
+provider "aws" {
+  alias   = "ohio"
+  region  = "us-east-2"
+  profile = "default"
+
+  default_tags {
+    tags = {
+      Project   = "supermarket-detective"
+      ManagedBy = "terraform"
+    }
+  }
+}

@@ -59,6 +59,15 @@ data "aws_iam_policy_document" "databricks_read" {
     actions   = ["s3:PutObject", "s3:DeleteObject", "s3:AbortMultipartUpload"]
     resources = ["${aws_s3_bucket.raw.arn}/bronze/*"]
   }
+  # the Kaggle raw bucket in Ohio: read only
+  statement {
+    actions   = ["s3:ListBucket", "s3:GetBucketLocation"]
+    resources = [aws_s3_bucket.kaggle.arn]
+  }
+  statement {
+    actions   = ["s3:GetObject", "s3:GetObjectVersion"]
+    resources = ["${aws_s3_bucket.kaggle.arn}/*"]
+  }
   # Unity Catalog checks that the role can assume itself
   statement {
     actions   = ["sts:AssumeRole"]
