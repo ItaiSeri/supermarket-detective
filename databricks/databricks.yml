@@ -83,6 +83,9 @@ resources:
     kaggle_backfill:
       name: kaggle_backfill
       max_concurrent_runs: 1
+      # a schedule tick that finds the previous batch still running is dropped, not queued
+      queue:
+        enabled: false
       parameters:
         - name: batch_size
           default: "5"
@@ -107,6 +110,7 @@ resources:
             left: "{{tasks.claim_batch.values.go}}"
             right: "yes"
         - task_key: load_kaggle_prices
+          timeout_seconds: 2400  # normal: 20 s to 5 min; a hung task is stopped and the batch retried
           depends_on:
             - task_key: has_batch
               outcome: "true"
@@ -116,6 +120,7 @@ resources:
               kind: price
               job_run_id: "{{job.run_id}}"
         - task_key: load_kaggle_stores
+          timeout_seconds: 2400  # normal: 20 s to 5 min; a hung task is stopped and the batch retried
           depends_on:
             - task_key: load_kaggle_prices
           notebook_task:
@@ -124,6 +129,7 @@ resources:
               kind: store
               job_run_id: "{{job.run_id}}"
         - task_key: load_kaggle_promotions
+          timeout_seconds: 2400  # normal: 20 s to 5 min; a hung task is stopped and the batch retried
           depends_on:
             - task_key: load_kaggle_stores
           notebook_task:
