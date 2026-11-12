@@ -180,8 +180,8 @@ a:focus-visible { outline: 2px solid var(--daily); outline-offset: 2px; }
     <!-- sources -->
     <rect x="32" y="100" width="148" height="78" rx="6" class="box"/>
     <text x="44" y="124" class="bt">Kaggle dataset</text>
-    <text x="44" y="144" class="bs">1 snapshot per day</text>
-    <text x="44" y="162" class="bs">since 2024-09-22</text>
+    <text x="44" y="144" class="bs">1 version per day</text>
+    <text x="44" y="162" class="bs">sampled, 2024-10-22 on</text>
 
     <rect x="32" y="300" width="148" height="62" rx="6" class="box"/>
     <text x="44" y="324" class="bt">Chain price sites</text>
@@ -190,7 +190,7 @@ a:focus-visible { outline: 2px solid var(--daily); outline-offset: 2px; }
     <!-- AWS: daily lane -->
     <rect x="300" y="100" width="170" height="52" rx="6" class="box box-d"/>
     <text x="312" y="122" class="bt">EventBridge Scheduler</text>
-    <text x="312" y="141" class="bs">every day 09:00</text>
+    <text x="312" y="141" class="bs">Sun–Fri 09:00</text>
 
     <rect x="300" y="184" width="170" height="62" rx="6" class="box box-d"/>
     <text x="312" y="208" class="bt">Step Functions</text>
@@ -201,14 +201,14 @@ a:focus-visible { outline: 2px solid var(--daily); outline-offset: 2px; }
     <text x="312" y="344" class="bs">all branches</text>
 
     <!-- AWS: history lane -->
-    <text x="595" y="140" class="znote" text-anchor="middle">started by hand, once</text>
+    <text x="595" y="140" class="znote" text-anchor="middle">started by hand, a slice at a time</text>
     <rect x="510" y="184" width="170" height="62" rx="6" class="box box-h"/>
     <text x="522" y="208" class="bt">Step Functions</text>
-    <text x="522" y="228" class="bs">Map: date × chain</text>
+    <text x="522" y="228" class="bs">Map: file, 5 at a time</text>
 
     <rect x="510" y="300" width="170" height="62" rx="6" class="box box-h"/>
-    <text x="522" y="324" class="bt">Lambda backfill</text>
-    <text x="522" y="344" class="bs">sampled dates+stores</text>
+    <text x="522" y="324" class="bt">Lambda fetch_kaggle</text>
+    <text x="522" y="344" class="bs">1 Kaggle file → gzip → S3</text>
 
     <!-- AWS: shared -->
     <rect x="300" y="420" width="380" height="62" rx="6" class="box"/>
@@ -218,7 +218,7 @@ a:focus-visible { outline: 2px solid var(--daily); outline-offset: 2px; }
     <!-- Databricks: medallion stacked bottom-up -->
     <rect x="732" y="540" width="210" height="62" rx="6" class="box"/>
     <text x="744" y="564" class="bt">External location</text>
-    <text x="744" y="584" class="bs">supermarket_raw_scraper</text>
+    <text x="744" y="584" class="bs">raw_scraper, raw_kaggle</text>
 
     <rect x="732" y="420" width="210" height="62" rx="6" class="box"/>
     <text x="744" y="444" class="bt">Bronze: prices, stores, promos</text>
@@ -308,12 +308,12 @@ a:focus-visible { outline: 2px solid var(--daily); outline-offset: 2px; }
       <tr><th></th><th class="hh">History prep</th><th class="hd">Daily run</th></tr>
     </thead>
     <tbody>
-      <tr><th>When</th><td>Once, started by hand. Re-runnable for any missed date.</td><td>Every day at 09:00 Israel time.</td></tr>
-      <tr><th>Source</th><td>Past Kaggle versions, one per day, 2024-09-22 to yesterday. <span class="mono">index.json</span> maps version number to date.</td><td>Chain sites for every chain (raw XML), including the 7 that block foreign traffic. Today's Kaggle file only if a chain's site fails.</td></tr>
-      <tr><th>Scope</th><td>Weekly snapshots back to 2024-09-22, daily for the last 60 days, daily around Hanukkah 2025 (Dec 14–22). Sampled stores only.</td><td>10 major chains, all branches. Price, promo and store files. Silver keeps every store.</td></tr>
-      <tr><th>Unit of work</th><td>One Lambda per date × chain, run in parallel by the Map state.</td><td>One Lambda run per chain + file type, 30 inputs to one function; a broken chain site fails and retries alone.</td></tr>
-      <tr><th>Lands as</th><td><span class="mono">source=kaggle/date=…/chain=…/</span></td><td><span class="mono">source=scraper/…</span> or <span class="mono">source=kaggle/…</span></td></tr>
-      <tr><th>Safe to re-run</th><td>Yes. The S3 key is fixed per date, chain and file, so a re-run overwrites; S3 versioning keeps the old copy.</td><td>Yes, for the same reason. Auto Loader only picks up files it hasn't seen.</td></tr>
+      <tr><th>When</th><td>Once, started by hand, one slice (a few Kaggle versions) at a time. Re-runnable.</td><td>Sunday to Friday at 09:00 Israel time (no Saturday run).</td></tr>
+      <tr><th>Source</th><td>Past Kaggle versions, one per day. A version is a full snapshot and holds about two days of files; its date is the upload date, so each row's date comes from its file name. <span class="mono">index.json</span> maps version number to date.</td><td>Chain sites for every chain (raw XML), including the 7 that block foreign traffic. Today's Kaggle file only if a chain's site fails.</td></tr>
+      <tr><th>Scope</th><td>One version a week from 2024-10-22 (price and store files), every version in the windows around Hanukkah 2024 and 2025 (also promotion files), all stores of the 10 chains, full files only. About 156 versions.</td><td>10 major chains, all branches. Price, promo and store files. Silver keeps every store.</td></tr>
+      <tr><th>Unit of work</th><td>One Lambda call per Kaggle file (version × chain × file kind), 5 at a time by the Map state; a failed file retries alone.</td><td>One Lambda run per chain + file type, 30 inputs to one function; a broken chain site fails and retries alone.</td></tr>
+      <tr><th>Lands as</th><td><span class="mono">source=kaggle/date=&lt;version date&gt;/chain=…/&lt;name&gt;.csv.gz</span>, plus a manifest per file in <span class="mono">source=kaggle/_manifest/</span></td><td><span class="mono">source=scraper/…</span> or <span class="mono">source=kaggle/…</span></td></tr>
+      <tr><th>Safe to re-run</th><td>Yes. A file with a manifest (sizes, md5, status) is skipped; bronze skips files it already loaded. The S3 key is fixed per date, chain and file anyway.</td><td>Yes, for the same reason. Auto Loader only picks up files it hasn't seen.</td></tr>
     </tbody>
   </table>
   </div>
@@ -379,7 +379,7 @@ a:focus-visible { outline: 2px solid var(--daily); outline-offset: 2px; }
     <div class="row">
       <div class="layer">Sources</div>
       <div><div class="pick">Own scraper + Kaggle</div><div class="instead">Instead of <b>Kaggle only</b> or <b>scraper only</b></div></div>
-      <div class="reason"><p>Kaggle gives two years of history and a fallback for a chain whose site is down, but it is already converted to CSV, and the store id appears only on each file's first row. The scraper gives the raw XML, which is the real integration work. On days both cover a chain, the pipeline compares them.</p></div>
+      <div class="reason"><p>Kaggle gives two years of history, but it is already converted to CSV and sparse: a value equal to the row above is left blank in every column, so bronze fills each blank from the row above inside the file's block (checked against an independent pandas fill: same rows, same values). The scraper gives the raw XML, which is the real integration work. Where both hold the same source file, a data-quality check compares them.</p></div>
     </div>
     <div class="row">
       <div class="layer">Lakehouse</div>

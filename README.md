@@ -10,8 +10,8 @@ Stack: AWS (Tel Aviv region, ingestion) → Databricks Free Edition (Unity Catal
 ```
 AWS il-central-1 (Tel Aviv)               DATABRICKS FREE EDITION                        POWER BI
 ---------------------------               ------------------------------------------     ---------------
-EventBridge Scheduler (daily 09:00)       External location supermarket_raw_scraper      Desktop (authoring),
-  -> Step Functions state machine           reads S3 directly, no copy:                  Import from the SQL
+EventBridge Scheduler (Sun-Fri 09:00)     External locations raw_scraper + raw_kaggle    Desktop (authoring),
+  -> Step Functions state machine           read S3 directly, no copy:                   Import from the SQL
      Map state, one item per chain +        source=scraper|kaggle/date=/chain=/           warehouse
      file type (30, from chains.json),           |                                       star schema over gold:
      10 at a time, retries per item              | Auto Loader (new files only)            fact_price_daily,
@@ -29,26 +29,26 @@ EventBridge Scheduler (daily 09:00)       External location supermarket_raw_scra
      -> SNS topic -> email                       v
                                           GOLD   price_index_daily (fixed basket), eilat_vs_center,
                                                  fake_promo_candidates, shrinkflation_candidates
-One-off backfill: same Lambda, Map over
- sampled Kaggle versions (2024-09-22 on)
+One-off backfill: Lambda fetch_kaggle, Map over
+ the files of a slice of Kaggle versions, by hand
                                           OPS    run_log, dq_results, source_completeness
 ```
 
 ### Design decisions
 
 - **Ingestion lives in AWS, not in Databricks.** The Tel Aviv region gives an Israeli IP for chains that block foreign traffic (tested 2026-11-03), and Free Edition compute runs in Ohio (`us-east-2`).
-- **Databricks reads S3 directly; raw is not copied.** A read-only Unity Catalog external location (`supermarket_raw_scraper`, for `source=scraper/`) uses IAM role `supermarket-detective-databricks-read`. Bronze is written through a separate external location (`supermarket_bronze`, for `bronze/`), the only path that role can write to. Tested on Free Edition 2026-11-09: `LIST` and `read_files` work, and `.gz` is decompressed automatically. The storage credential and external location were created with the Databricks CLI (exact commands in the project log). The docs state a limited set of trusted outbound domains, but S3 was reachable in a real test, so re-test if it ever stops working. Auto Loader should use directory listing, because the role has no SQS/SNS permissions.
+- **Databricks reads S3 directly; raw is not copied.** Read-only Unity Catalog external locations (`supermarket_raw_scraper` for `source=scraper/`, `supermarket_raw_kaggle` for `source=kaggle/`, both on storage credential `supermarket_s3_read`) use IAM role `supermarket-detective-databricks-read`. Bronze is written through a separate external location (`supermarket_bronze`, for `bronze/`), the only path that role can write to. Tested on Free Edition 2026-11-09: `LIST` and `read_files` work, and `.gz` is decompressed automatically. The storage credential and external location were created with the Databricks CLI (exact commands in the project log). The docs state a limited set of trusted outbound domains, but S3 was reachable in a real test, so re-test if it ever stops working. Auto Loader should use directory listing, because the role has no SQS/SNS permissions.
 - **One Lambda function, one Map item per chain + file type.** 10 chains x 3 file types = 30 inputs to the same function, each with its own 15 minutes. A whole Shufersal day doesn't fit in one run; prices alone took 10.5 minutes (2026-11-08). A full chain also unzips to 2 GB or more, more than the function's 2 GB /tmp, so the handler zips, uploads and deletes each file as it arrives. A run killed at the 15-minute limit keeps what it already uploaded. Each item retries alone after 10 and 20 minutes, a failed item doesn't stop the others, and a final check marks the whole run failed if any item failed, which triggers the email alarm. `ok: true` means the files seen were saved, not that the list was complete: the scraper swallows listing timeouts, so silver needs a completeness check. The scraper's headless browser (Playwright) is only a fallback for reading the chain list from gov.il, not for downloading files; the container image includes it anyway. Fargate is the fallback if a chain ever needs longer than 15 minutes.
   - Considered and skipped: Lambda Managed Instances (90-minute timeout since 2026-09) run on EC2 capacity billed even when idle, so they cost more than this daily batch needs. Lambda durable functions (announced for Tel Aviv in 2026-04) could replace Step Functions as the orchestrator; Step Functions gives a visual run graph, which is better for a portfolio.
 - **AWS starts Databricks by writing a marker file; no token lives in AWS.** When the Map ends, state `WriteMarker` puts `source=scraper/_markers/<YYYY-MM-DD>_<execution>.json` (execution id, start time, `some_failed`) into the raw bucket, and job `daily_load` (bronze_load, then silver_load) has a file arrival trigger on that folder (wait 60 s after the last change). The marker is written even when some chains failed; the run then ends FAILED and the alarm email fires. The key is new for every execution because a file arrival trigger fires on new files, not on overwrites. `_markers/` is its own flat folder because listing mode allows at most 10,000 files per watched path. The external location `supermarket_raw_scraper` has file events turned off, so Databricks finds new files by listing the folder: the read-only role has no SNS/SQS rights, and none were added. Decision record, 2026-11-11: EventBridge Connections are disabled in il-central-1, so the Step Functions HTTP task to the Jobs API cannot be used; a Lambda holding a Databricks token was rejected (the token expires every 90 days); a relay in another region was rejected as more moving parts. Trade-off: if the trigger does not fire, AWS does not see it; a missed day shows up in `ops.run_log` and the DQ checks.
-- **Two sources, one bronze.** Our own scraper keeps the raw XML (the real integration work); the Kaggle daily snapshot supplies history and the geo-blocked chains. Both land in the same raw layout tagged with `source`, and on days both cover a chain, a reconciliation check compares them.
+- **Two sources, one bronze.** Our own scraper keeps the raw XML (the real integration work); the Kaggle snapshots supply history. Both land in the same raw layout tagged with `source` and in the same bronze and silver tables with `source` = `scraper` or `kaggle`. Where both hold the same source file, DQ check `kaggle_vs_scraper_file_mismatch` compares them; in silver the scraper row wins a tie. The Kaggle backfill is loaded in slices by job `kaggle_backfill`, never while `daily_load` runs; its plan is in [docs/backfill-plan.md](docs/backfill-plan.md).
 - **S3 is the archive of record.** Raw files are kept forever in a versioned bucket; Databricks can be rebuilt from it.
 - **`date=` in the S3 path is the collection date, not the file's date.** A run also collects older files still listed on a chain's site, so silver takes each file's date from its name.
 - **Raw keeps files exactly as published; bronze keeps their values exactly as published.** Bronze has one row per product with every value as text, so it isn't a second copy of the same gzip bytes and it can be queried with SQL. Databricks' medallion guidance lists flattening under silver; it's done here on purpose, because the untouched files stay in raw. A parser bug never loses data: fix it and reload bronze from raw. Silver matches field names across chains and sets real types.
 - **No config table for field names.** The 10 chains differ in only a few spellings (`ItemName` / `ItemNm`, `StoreID` / `StoreId`), so one `coalesce` per field handles them. A `chain_config` table was planned and dropped: it would be machinery with almost nothing to configure.
 - **Price history is SCD Type 2,** keyed on chain + store + barcode: a new row when any tracked value changes, or when the product comes back after a file that arrived without it, with `first_seen` / `last_seen`. A missing file is not a missing product. Daily full files make this the "source sends a full dump" CDC problem.
 - **Data quality at three levels:** file (expected chain/store/type arrived; row count within ±30% of the 7-day average), row (valid barcode, price > 0, parsable quantity; failures go to quarantine), business (price jump > 300% flagged).
-- **Stay under the daily compute quota:** each silver run reads only bronze rows it hasn't seen. Silver keeps all stores of the 10 chains: the first load of 20 million rows took about a minute and 328 MB. The Kaggle backfill stays sampled.
+- **Stay under the daily compute quota:** each silver run reads only bronze rows it hasn't seen. Silver keeps all stores of the 10 chains: the first load of 20 million rows took about a minute and 328 MB. The Kaggle backfill is sampled in time (weekly, plus daily windows around Hanukkah) and loaded one slice a day.
 - **Everything as code:** AWS resources in Terraform or CDK, Databricks pipelines and jobs in a bundle, all in GitHub with CI. Free Edition accounts can be deleted after long inactivity, so the repo must rebuild everything.
 
 ### Bronze table: `workspace.bronze.price_items`
@@ -111,9 +111,32 @@ Promotion files come in two layouts, sometimes within one chain. Bronze keeps bo
 
 Checked 2026-11-10: all 3,156 promotion files in S3 are loaded, 35,694,531 rows and 5,000,651 promotions, from all 10 chains. No file failed to parse, and every file's product rows and promotions match its tag counts. Two files contain no promotions, so each is one row with NULL `promotion`. The load took about 12 minutes.
 
+### Kaggle rows in bronze
+
+Notebook `databricks/notebooks/bronze_kaggle.py`, job `kaggle_backfill` (tasks `load_kaggle_prices`, `load_kaggle_stores`, `load_kaggle_promotions`, then the whole `silver_load` job, then `log_run`). The three tables above get rows with `source = 'kaggle'` in the same shape as the scraper's, so silver reads both the same way:
+
+| Column | For a Kaggle row |
+|---|---|
+| `file_path` | S3 path of the Kaggle CSV (`source=kaggle/date=<version date>/chain=<CHAIN>/<name>.csv.gz`). One CSV holds many source files |
+| `file_name` | The source file's name, taken from the block's first row (`PriceFull7290785400000-010-202611090010.xml`); silver takes the file's date from it. Per-file checks group by `file_path` + `file_name` |
+| `collected_date` | The `date=` folder: the version date |
+| `declared_count`, `tags_in_file`, `promotions_in_file`, `items_in_file`, `parse_error` | NULL. There is no XML to count; the row count of each block was checked against an independent count (see below) |
+| `header`, `fields`, `promotion`, `item` | Maps with the scraper's field names (`StoreID`, `ItemCode`, `PromotionId`, ...); entries that are empty in the source are left out |
+| `promotion_seq` | Position of the row in its block |
+
+How a Kaggle CSV becomes rows: all cells are read as text with `header=false`, because versions have different headers; each file's header is its first row. Every blank cell is filled from the row above inside the same block, in file order (a `.gz` file can't be split, so one task reads it in order); the literal `''` becomes NULL and is never filled. Line ends are mixed in these files (CRLF on the header and some rows, LF on the rest): the reader is told `lineSep = LF`, and the stray CR is trimmed from the last cell. Without that, Spark takes the first line's CRLF as the only separator and merges rows (it lost 11,508 of 325,151 rows of one Shufersal promotion file). Promotion cells hold JSON (single-quoted, Python style, in 2025 versions; double-quoted in 2026; `NO_BODY` = empty element, a single item is an object instead of a list), parsed as `VARIANT`. Three promotion layouts are mapped to the scraper's two: items in `groups` (key spelling of the Groups layout, `PromotionID`), items in `promotionitems` (flat layout, `PromotionId`), and, in one older feed (Victory, Mahsani Ashuk), one promotion + product per row with `itemcode` columns (flat). Two Kaggle spellings of one field are coalesced into the scraper's key (`unitmeasure` and `unitofmeasure` into `UnitOfMeasure`).
+
+Loading skips files whose `file_path` is already in the table, so a re-run adds nothing; files are written 30 at a time.
+
+Checked 2026-11-12 on slice 00 (two versions: 405, dated 2025-12-15, price + store + promo; 720, dated 2026-11-12, price + store): every source file in the 5,102 blocks (3,532 price, 1,544 promotion, 26 store) has exactly as many bronze rows as rows in its block, counted with Python's `csv` module (23,870,219 price rows, 2,285,907 promotion rows, 2,371 store rows). The blank fill was compared with an independent pandas fill on 931 price files of 5 chains and both versions: row counts, price sums and a CRC of 26 columns per row are equal in all 931.
+
+Silver over slice 00 (job run 703778780511446, 2026-11-12): 5,902,790 Kaggle rows reached `price_obs` (the rest are repeats inside a file or days our scraper already has), 1,327,292 reached `promotion_obs`, 10,552 price rows went to `quarantine`, and 464,142 promotion rows to `promotion_quarantine`, of which 464,137 are `wrong_chain`: the promotion files of Victory and Mahsani Ashuk's older feed carry chain id `72906`, not the 13-digit id (a decision for the owner: accept a prefix, or leave those two chains without Hanukkah 2025 promotions). `price_history` was rebuilt in full in 38 s (12.0 million periods). DQ: no FAIL, the same two WARNINGs as before. `kaggle_vs_scraper_file_mismatch` is 0: 1,315 source files exist in both sources (v720 against our scraper, 10.85 million rows each), and every one has the same row count and price sum in both.
+
+Wall time per task: `load_kaggle_prices` 208 s, `load_kaggle_promotions` 86 s, `load_kaggle_stores` 69 s (run in parallel, 208 s together), `silver_load` 292 s (price_obs 105, promotion_obs 85, DQ 69, items 64, price_history 38).
+
 ### Silver table: `workspace.silver.stores`
 
-Managed Delta table, rebuilt in full on each run by `databricks/notebooks/silver_stores.py` (job `silver_load`, not scheduled yet). One row per `chain` + `store_id`: the store's newest version in `bronze.stores`, by the date in the file name and then `modified_at`. Older versions of a store aren't kept here; they stay in bronze.
+Managed Delta table, rebuilt in full on each run by `databricks/notebooks/silver_stores.py` (job `silver_load`, not scheduled yet). One row per `chain` + `store_id`: the store's newest version in `bronze.stores` among our own collection (`source = 'scraper'`), by the date in the file name and then `modified_at`. Older versions of a store aren't kept here; they stay in bronze. Kaggle store files (history) are loaded into `bronze.stores` only, so this table stays the current store list.
 
 | Column | Type | Meaning |
 |---|---|---|
@@ -354,6 +377,7 @@ Managed Delta table, written by `databricks/notebooks/silver_dq.py` (job `silver
 | `price_obs_without_item` | row | - | 0 | 0, PASS |
 | `items_without_name` | row | 0 | - | 0, PASS |
 | `chain_without_price_files` | file | - | 0 | 0, PASS |
+| `kaggle_vs_scraper_file_mismatch` | file | 0 | - | see below |
 | `price_store_completeness` | file | 0 | - | 0, PASS |
 | `promotion_repeated_keys` | row | - | 0 | 0, PASS |
 | `promotion_reject_percent` | row | 0.1 | 5 | 0.00003, PASS |
@@ -385,17 +409,31 @@ Checked on the latest Stores file of each of the 10 chains, collected 2026-11-09
 
 ## The Kaggle dataset
 
-https://www.kaggle.com/datasets/erlichsefi/israeli-supermarkets-2024 (CC BY-NC-SA 3.0 IGO, by Sefi Erlich)
+https://www.kaggle.com/datasets/erlichsefi/israeli-supermarkets-2024 (CC BY-NC-SA 3.0 IGO, by Sefi Erlich). The backfill plan and its steps: [docs/backfill-plan.md](docs/backfill-plan.md).
 
-- One Kaggle version per day, each a full snapshot of that day: versions 6–711 cover 2024-09-22 to 2026-11-03. Public files download without a Kaggle login (`kagglehub`), one file at a time, from any version.
-- 358 files, 13.9 GB per version. One folder per chain (34 chains, e.g. `shufersal/`, `ramilevy/`, `yohananof/`, `yaynotbitanandcarrefour/`), each with `price_full_file_<chain>.csv`, `price_file_`, `promo_full_file_`, `promo_file_`, `store_file_` (plus JSON status files), and dataset-level `index.json` (version → date), `scraper_quality.json`, `parser_quality.json`.
-- Columns are the regulation's field names, lowercased. Prices: `chainid, subchainid, storeid, itemcode, itemname, manufacturename, quantity, unitqty, unitofmeasure, bisweighted, itemprice, unitofmeasureprice, allowdiscount, itemstatus, priceupdatetime, lastsaledatetime` + `file_name`. Promos: `promotionid, promotiondescription, promotionstartdatetime, promotionenddatetime, minnoofitemoffered, clubid, groups` (items and discounted prices as nested JSON). Stores: `storeid, storename, address, city, storetype`.
-- Quirks found in a sample (Hazi Hinam, 2026-11-02; 163,176 price rows from 13 stores):
-  - `file_name`, `chainid`, `storeid` are filled only on the first row of each source file (26 of 163,176 rows). The store of every other row depends on row order, so it must be forward-filled carefully, or read from our own raw XML instead.
-  - Empty values are the literal string `''`; nested JSON uses `NO_BODY` placeholders.
-  - 13-digit chain ids were read as floats (`7290700100008.0`); read ids as strings.
-  - `city` is sometimes a name and sometimes a CBS settlement code (`8300` = Rishon LeZion).
-  - Some rows have no `itemprice`, and some have no quantity or unit.
+**What it is.** One dataset version per upload day (721 by 2026-11-12), each a full snapshot. About 358 files, 13.9 GB per version: one folder per chain from about version 400 on (older versions are flat), with `price_full_file_<chain>.csv`, `price_file_` (deltas), `promo_full_file_`, `promo_file_`, `store_file_` and JSON status files, plus dataset-level `index.json` (version to date) and quality files. Columns are the regulation's field names.
+
+**How to download one file, no Kaggle login:** `GET https://www.kaggle.com/api/v1/datasets/download/erlichsefi/israeli-supermarkets-2024/<path>?datasetVersionNumber=<N>`, with the `/` of a path like `keshet/price_full_file_keshet.csv` written as `%2F` (a plain `/` answers 404). The answer is a 302 to a signed Google Storage link (range requests work), the same call `kagglehub` makes. `GET .../api/v1/datasets/list/erlichsefi/israeli-supermarkets-2024?datasetVersionNumber=<N>&pageSize=200` lists a version's files with sizes. Lambda `fetch_kaggle` uses only these two calls (Python standard library).
+
+| Fact (sample of 2026-11-12) | What it means for us |
+|---|---|
+| Same source files as our scraper: same names (ours add `.gz`), 600 of 600 sampled prices equal | Where both exist the rows are identical; "scraper beats Kaggle" is a tie-break, not a conflict |
+| All 10 chains covered from 2024-10-22; versions 2-9 (Sept 2024) are broken | The backfill starts at 2024-10-22 |
+| Gaps: 2025-01-12..16 (all chains), Hazi Hinam 2024-11-24..12-15, Carrefour holes 2025-05..07; 107 calendar days with no version | History has holes. `price_history` uses `first_seen` / `last_seen`, so a hole is "not observed", never "price changed" |
+| A version holds about two days of files; its date is the upload date. 35 dates have two versions | Each row's date comes from its file name; one version per date is loaded (the lowest) |
+| The CSV is sparse: a value equal to the row above is left blank, in every column. A block of rows is one source file and starts at a non-empty `file_name` | Bronze fills each blank from the row above, inside the block, in file order (see "Kaggle rows in bronze") |
+| The literal `''` means empty in the source | It becomes NULL and is never filled |
+| A blank can be "same as above" or "really empty", and the file can't tell | An assumption. No mismatch was found against the XML of the same files |
+| Headers are CamelCase in 2024, lowercase later; Keshet and Rami Levy carry two schemas (`priceupdatedate` / `priceupdatetime`, `manufacturername` / `manufacturename`, `itemname` / `itemnm`); one older feed writes `unitmeasure` | One column-name map in the loader |
+| Store ids are padded (`020`) in price files, unpadded in some 2024 store files | Silver compares store ids as numbers |
+| Line ends are mixed (CRLF and LF in one file) | The reader needs `lineSep = LF` or rows are merged |
+| Promotion rows hold nested JSON; 2025 versions use Python-style single quotes. In Victory and Mahsani Ashuk's older feed the promotion file's `chainid` is `72906`, not the 13-digit id, and dates are written `2025/12/12` | Parsed as VARIANT after the quotes are fixed; silver turns `/` into `-` before casting. The short chain id makes silver reject those promotion rows as `wrong_chain` (open question) |
+| Size of the 10 chains, uncompressed: prices about 1.2 GB per version; gzip shrinks prices 4-5x and promotions about 20x; promotion files grew about 5x from Dec 2025 | Raw is stored gzipped; storage stays around $1-2 a month. Slice 00: 4.42 GB downloaded, 0.99 GB in S3 |
+| Compute: about 13-20 DBU a day on our own collection; Databricks reads the Tel Aviv bucket from Ohio, so "networking" is a third to half of it; the Free Edition quota is not published | Load in slices, one slice a day, and read `system.billing.usage` the next day |
+
+**Scope (decided 2026-11-12).** One version a week from 2024-10-22 to file dates before 2026-11-09 (price and store files, about 98 versions); every version in the windows 2024-12-04 to 2025-01-09 and 2025-11-23 to 2025-12-29 (Hanukkah 2024 and 2025, starting 3 weeks early so the "price 14 days earlier" exists), also with promotion files (58 versions); 1-2 versions that overlap our own collection, only to reconcile. 156 versions in all, all stores of the 10 chains, only `price_full_file`, `promo_full_file` and `store_file`. Chain names follow `infra/chains.json` (`victory`, `victory_new_source` -> `VICTORY_NEW_SOURCE`; `mahsani_ashuk(_new_source)` -> `MAHSANI_ASHUK_NEW_SOURCE`; `yayno_bitan(_and_carrefour)` -> `YAYNO_BITAN_AND_CARREFOUR`; `_temp` stems are ignored; when a version has both an old and a `_new_source` file, the new one is used). Load order: Hanukkah 2025 window, Hanukkah 2024 window, then weekly, newest to oldest.
+
+**Raw layout.** `s3://supermarket-detective-raw-971422709739/source=kaggle/date=<version date>/chain=<CHAIN>/<original name>.gz`, plus one manifest per copied file at `source=kaggle/_manifest/v<version>/<CHAIN>_<kind>.json` (sizes listed and received, md5, S3 size, status; written last, so a manifest means a complete file). The Lambda checks the received size against the size Kaggle lists, the md5 against Google's header when it is sent, and the S3 size after upload. Slices are `ingestion/fetch_kaggle/slices/NN.json` (`make_slices.py`), started with `aws stepfunctions start-execution` on state machine `supermarket-detective-backfill` (5 files at a time, 3 retries with a growing wait; it writes no marker, so it never starts `daily_load`).
 
 ## Chains blocked outside Israel
 
@@ -417,7 +455,7 @@ Library notes from the test (il-supermarket-scraper 1.0.19): scraper classes tak
 
 ## Folders
 
-- `ingestion/` - Lambda container (scraper + Kaggle pull + upload), backfill mode, tests
+- `ingestion/` - `fetch_chain/` (Lambda container: scraper + upload), `fetch_kaggle/` (Lambda zip + `make_slices.py` + slice files for the Kaggle backfill), `reach_test/`
 - `infra/` - AWS resources as code (S3, ECR, Lambda, Step Functions, EventBridge schedule, IAM, alarms)
 - `databricks/` - bundle: notebooks (bronze, silver) and jobs
 - `powerbi/` - .pbix and screenshots for X posts
@@ -430,7 +468,7 @@ Library notes from the test (il-supermarket-scraper 1.0.19): scraper classes tak
 | 0 | Prove the risky parts | AWS Tel Aviv reaches every chain, Databricks accepts uploads, Power BI connects to the Free Edition warehouse | Done 2026-11-03 |
 | 1 | Daily collection in the cloud | Every morning at 09:00 AWS downloads all chains' files into S3, where Databricks can read them directly, with no laptop involved | ~2026-11-10 |
 | 2 | Bronze + silver | Raw files become clean tables (stores, products, prices) with SCD2 price history, quality checks, quarantine and ops tables, for all 10 chains | ~2026-11-17 |
-| 3 | History backfill | Kaggle snapshots (weekly back to 2024-09-22, daily for the last 60 days and around Hanukkah 2025) in the same S3 bucket under `source=kaggle/`, sampled stores only, through the same bronze/silver | ~2026-11-21 |
+| 3 | History backfill | Kaggle snapshots (weekly back to 2024-10-22, daily around Hanukkah 2024 and 2025, all stores) in the same S3 bucket under `source=kaggle/`, through the same bronze/silver; steps in [docs/backfill-plan.md](docs/backfill-plan.md) | ~2026-11-21 |
 | 4 | Gold + Power BI v1 | Price index and the Eilat VAT check; first X post | ~2026-11-28 |
 | 5 | Hanukkah index | Holiday prices 2026 vs. Hanukkah 2025 (2025-12-14 to 12-22) | before 2026-12-04 |
 | 6 | Extras | Fake promotions, shrinkflation, pipeline health page, n8n + LLM alert to Telegram | December |
