@@ -93,3 +93,24 @@ Kaggle (public, no login)
 - Why slices with a manifest: a restartable backfill, the same idea as a batch restart point.
 - Why Spark's CSV reader and not a UDF: cost. The order-preservation assumption is proven, not assumed.
 - In production you'd pay for compute and load it in one go, and keep raw in the same region as compute to avoid networking cost.
+
+## 8. Change 2026-11-12 afternoon: storage next to compute (Ohio) + a batch queue
+
+**Why:** slice 00's bill showed cross-region networking (Databricks in Ohio reading our Tel Aviv bucket) at ~15 DBU against ~3 DBU of real compute. Every read of bronze crossed the ocean, because bronze was an external table in the Tel Aviv bucket. Decided by Itai 2026-11-12: move everything Databricks reads repeatedly to Ohio (us-east-2); only the scraper must stay in Tel Aviv (Israeli IP). Itai also decided: run the whole backfill now, unattended, in batches with a log table; hitting the Free Edition quota is acceptable (work resumes when it resets), and a missed daily run is acceptable.
+
+**Target layout:**
+```
+SCRAPER: chain sites -> Lambda (Tel Aviv) -> raw S3 Tel Aviv (unchanged) --+  read once by Auto Loader
+                                                                           +--> BRONZE managed (Ohio) -> SILVER (Ohio) -> GOLD
+KAGGLE:  Kaggle (Google Cloud, USA) -> Lambda (Ohio) -> raw S3 Ohio -------+  no ocean crossing
+```
+- **New bucket** `supermarket-detective-kaggle-971422709739` in us-east-2: versioning, public access blocked, Intelligent-Tiering, layout `source=kaggle/date=<version date>/chain=<CHAIN>/<name>.gz` + `_manifest/` as before. Read-only external location for Databricks.
+- **Kaggle Lambda + backfill state machine move to us-east-2** (same code). Downloading all ~165 versions up front is cheap (Lambda + ~50 GB S3), so the download is separate from loading.
+- **Bronze becomes managed Delta tables** (Databricks storage, Ohio), same names and columns, via a one-time `DEEP CLONE`; Auto Loader checkpoints kept, so no file loads twice. Bronze stays rebuildable from raw, which stays in our S3. Kaggle rows go into the same bronze tables with `source='kaggle'`.
+- The Tel Aviv `bronze/` prefix is left in place (not deleted) until Itai decides.
+- The daily DQ must not scan all of bronze; reconciliation checks look only at the newest files.
+
+**Batch queue (resumable backfill):**
+- `workspace.ops.backfill_queue`: one row per Kaggle version in load order (Hanukkah 2025 window, Hanukkah 2024 window, then weekly newest → oldest), with `status` (`pending` / `running` / `done` / `failed`), `batch_id`, `started_at`, `ended_at`, `job_run_id`, rows added per table, `error`.
+- Job `kaggle_backfill`, one run = one batch: claim the next N `pending` versions (or a `running`/`failed` batch left over from an interrupted run) → delete any bronze rows of those files (makes a retry safe) → load their files into bronze → run the silver tasks → mark `done` with row counts. Silver MERGEs are already safe to repeat.
+- Scheduled every 30 minutes, `max_concurrent_runs` 1, until the queue is empty; then the schedule is paused. If the quota stops compute, the batch stays `running`/`failed` and the next run after the reset redoes it. The queue table is the "where did we stop" answer.
