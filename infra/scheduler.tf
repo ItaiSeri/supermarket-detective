@@ -30,8 +30,10 @@ resource "aws_iam_role_policy" "daily_schedule_start" {
 
 resource "aws_scheduler_schedule" "daily_collect" {
   name = "supermarket-detective-daily-collect"
-  # 09:00, because the scraper disables Victory and Mahsani Ashuk until 08:00
-  schedule_expression          = "cron(0 9 * * ? *)"
+  # 09:00, because the scraper disables Victory and Mahsani Ashuk until 08:00.
+  # SUN-FRI: no Saturday run, decided by Itai 2026-11-12. Sunday's run still picks up
+  # the files the chains published on Saturday, if they are still listed on the sites.
+  schedule_expression          = "cron(0 9 ? * SUN-FRI *)"
   schedule_expression_timezone = "Asia/Jerusalem"
 
   flexible_time_window {
