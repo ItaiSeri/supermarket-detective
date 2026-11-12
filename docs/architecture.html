@@ -170,7 +170,7 @@ a:focus-visible { outline: 2px solid var(--daily); outline-offset: 2px; }
     <rect x="16" y="50" width="180" height="574" rx="10" class="zone"/>
     <text x="30" y="74" class="zlabel">SOURCES</text>
     <rect x="212" y="50" width="488" height="574" rx="10" class="zone"/>
-    <text x="226" y="74" class="zlabel">AWS · TEL AVIV REGION</text>
+    <text x="226" y="74" class="zlabel">AWS · TEL AVIV + OHIO</text>
     <rect x="716" y="50" width="380" height="574" rx="10" class="zone"/>
     <text x="730" y="74" class="zlabel">DATABRICKS FREE EDITION</text>
     <text x="730" y="92" class="znote">one Lakeflow pipeline, starts when files arrive</text>
@@ -201,7 +201,7 @@ a:focus-visible { outline: 2px solid var(--daily); outline-offset: 2px; }
     <text x="312" y="344" class="bs">all branches</text>
 
     <!-- AWS: history lane -->
-    <text x="595" y="140" class="znote" text-anchor="middle">started by hand, a slice at a time</text>
+    <text x="595" y="140" class="znote" text-anchor="middle">Kaggle lane runs in Ohio (us-east-2)</text>
     <rect x="510" y="184" width="170" height="62" rx="6" class="box box-h"/>
     <text x="522" y="208" class="bt">Step Functions</text>
     <text x="522" y="228" class="bs">Map: file, 5 at a time</text>
@@ -213,16 +213,16 @@ a:focus-visible { outline: 2px solid var(--daily); outline-offset: 2px; }
     <!-- AWS: shared -->
     <rect x="300" y="420" width="380" height="62" rx="6" class="box"/>
     <text x="312" y="444" class="bt">S3 raw archive (versioned, kept forever)</text>
-    <text x="312" y="464" class="bs">source=scraper|kaggle / date= / chain= + _markers</text>
+    <text x="312" y="464" class="bs">scraper: Tel Aviv · kaggle: its own bucket in Ohio</text>
 
     <!-- Databricks: medallion stacked bottom-up -->
     <rect x="732" y="540" width="210" height="62" rx="6" class="box"/>
     <text x="744" y="564" class="bt">External location</text>
-    <text x="744" y="584" class="bs">raw_scraper, raw_kaggle</text>
+    <text x="744" y="584" class="bs">raw_scraper (Tel Aviv), raw_kaggle_ohio</text>
 
     <rect x="732" y="420" width="210" height="62" rx="6" class="box"/>
     <text x="744" y="444" class="bt">Bronze: prices, stores, promos</text>
-    <text x="744" y="464" class="bs">1 row per product/store, as text</text>
+    <text x="744" y="464" class="bs">managed Delta, Ohio · text, 1 row/product</text>
 
     <rect x="732" y="290" width="210" height="78" rx="6" class="box"/>
     <text x="744" y="314" class="bt">Silver</text>
@@ -294,7 +294,7 @@ a:focus-visible { outline: 2px solid var(--daily); outline-offset: 2px; }
     <text x="1207" y="330" class="el">charts</text>
   </svg>
   </div>
-  <figcaption>Both lanes write to the same S3 archive in the same folder layout, so everything after S3 doesn't care where a file came from. The medallion is drawn bottom-up: raw files at the bottom, report tables at the top. Not drawn: when the Map ends, Step Functions writes a small marker file to <span class="mono">source=scraper/_markers/</span> (WriteMarker), and a file arrival trigger on that folder starts the Databricks job <span class="mono">daily_load</span> (bronze, then silver); AWS holds no Databricks token, because EventBridge Connections are disabled in Tel Aviv. An EventBridge rule and SNS send an email on any failed Step Functions run, and Power BI Desktop runs on the laptop only as the authoring tool; nothing scheduled runs there.</figcaption>
+  <figcaption>Both lanes write to a raw S3 archive in the same folder layout (the scraper's in Tel Aviv, because the chain sites need an Israeli IP; the Kaggle lane's in Ohio, next to Databricks), so everything after S3 doesn't care where a file came from. Bronze is a managed Delta table in Databricks storage (Ohio, next to the compute) since 2026-11-12: reading an external bronze table in the Tel Aviv bucket crossed the ocean on every read, and that networking cost was about five times the real compute of the first Kaggle slice. Raw stays in S3, so bronze can be rebuilt. The Kaggle backfill runs as a queue (<span class="mono">ops.backfill_queue</span>): job <span class="mono">kaggle_backfill</span> takes the next few versions every 30 minutes until none are left. so everything after S3 doesn't care where a file came from. The medallion is drawn bottom-up: raw files at the bottom, report tables at the top. Not drawn: when the Map ends, Step Functions writes a small marker file to <span class="mono">source=scraper/_markers/</span> (WriteMarker), and a file arrival trigger on that folder starts the Databricks job <span class="mono">daily_load</span> (bronze, then silver); AWS holds no Databricks token, because EventBridge Connections are disabled in Tel Aviv. An EventBridge rule and SNS send an email on any failed Step Functions run, and Power BI Desktop runs on the laptop only as the authoring tool; nothing scheduled runs there.</figcaption>
 </figure>
 
 <section>

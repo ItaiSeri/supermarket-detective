@@ -4,10 +4,10 @@ import xml.etree.ElementTree as ET
 from pyspark.sql import functions as F
 from pyspark.sql.types import StructType, StructField, StringType, IntegerType, MapType, ArrayType
 
+# Bronze is a MANAGED Delta table (Databricks storage in us-east-2, next to the compute); the checkpoint stays in S3.
 BUCKET = "s3://supermarket-detective-raw-971422709739"
 SOURCE = f"{BUCKET}/source=scraper/date=*/chain=*/"
 TABLE = "workspace.bronze.stores"
-TABLE_PATH = f"{BUCKET}/bronze/stores"
 CHECKPOINT = f"{BUCKET}/bronze/_checkpoints/stores"
 
 # COMMAND ----------
@@ -26,7 +26,6 @@ CREATE TABLE IF NOT EXISTS {TABLE} (
   fields          MAP<STRING, STRING>,
   loaded_at       TIMESTAMP
 ) USING DELTA
-LOCATION '{TABLE_PATH}'
 """)
 
 # COMMAND ----------

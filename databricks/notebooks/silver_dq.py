@@ -41,7 +41,7 @@ listed_cte = f"""
 sf AS (
   SELECT chain, regexp_replace(fields['StoreID'], '^0+(?=.)', '') AS store_id,
          to_date(regexp_extract(file_name, '-(20[0-9]{{6}})', 1), 'yyyyMMdd') AS d
-  FROM workspace.bronze.stores WHERE parse_error IS NULL
+  FROM workspace.bronze.stores WHERE parse_error IS NULL AND source = 'scraper'
 ),
 newest AS (SELECT chain, max(d) AS d FROM sf WHERE d <= DATE'{latest}' GROUP BY chain),
 listed AS (
@@ -83,17 +83,24 @@ LEFT ANTI JOIN (SELECT DISTINCT chain FROM {P} WHERE file_date = DATE'{latest}')
 
 # Kaggle against our scraper: the same source file (same name once ".gz" and ".xml" are removed) must have
 # the same number of rows and the same sum of prices in both. Only files present in both are compared.
+# Bronze is big (Kaggle history), so the check looks only at our scraper's files of the last 3 collection
+# days and at Kaggle versions dated on or after the first of those days (a Kaggle version is dated by upload
+# day, so it is never older than the files it holds). Older overlaps were checked when they were loaded.
 name_of = "regexp_replace(file_name, '([.]gz|[.]xml)+$', '')"
 price_sum = "sum(try_cast(fields['ItemPrice'] AS DECIMAL(18,2)))"
+recent_from = f"DATE'{collected}' - 3"
 kaggle_vs_scraper = f"""
-WITH kaggle AS (
-  SELECT {name_of} AS f, file_path, count(*) AS n, {price_sum} AS s
-  FROM workspace.bronze.price_items WHERE source = 'kaggle' AND parse_error IS NULL GROUP BY 1, 2
-),
-scraper AS (
+WITH scraper AS (
   SELECT {name_of} AS f, file_path, count(*) AS n, {price_sum} AS s
   FROM workspace.bronze.price_items
-  WHERE source = 'scraper' AND parse_error IS NULL AND {name_of} IN (SELECT f FROM kaggle)
+  WHERE source = 'scraper' AND parse_error IS NULL AND collected_date >= {recent_from}
+  GROUP BY 1, 2
+),
+kaggle AS (
+  SELECT {name_of} AS f, file_path, count(*) AS n, {price_sum} AS s
+  FROM workspace.bronze.price_items
+  WHERE source = 'kaggle' AND parse_error IS NULL AND collected_date >= {recent_from}
+    AND {name_of} IN (SELECT f FROM scraper)
   GROUP BY 1, 2
 ),
 k AS (SELECT f, max(n) AS n, max(s) AS s FROM kaggle GROUP BY f),
@@ -152,7 +159,7 @@ checks = [
      0, None, "Chains with more stores missing a price file on the latest date than on a normal recent day (beyond 2 stores or 3% of the chain)"),
     ("kaggle_vs_scraper_file_mismatch", "file",
      kaggle_vs_scraper,
-     0, None, "Source files that exist in both Kaggle and our scraper whose row count or price sum differs"),
+     0, None, "Source files of the last 3 collection days that exist in both Kaggle and our scraper whose row count or price sum differs"),
     ("promotion_repeated_keys", "row",
      f"SELECT count(*) FROM (SELECT 1 FROM {PO} WHERE file_date = DATE'{promo_latest}' GROUP BY chain, store_id, promotion_id, group_id, item_code HAVING count(*) > 1)",
      None, 0, "Same chain, store, promotion, group, product and day appears more than once in promotion_obs"),
