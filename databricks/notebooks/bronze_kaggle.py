@@ -16,12 +16,20 @@
 # Line ends are mixed in these files (CRLF on the header and some rows, LF on the rest), so the reader is
 # told lineSep = LF; otherwise Spark takes the first line's CRLF as the only separator and merges rows.
 # The stray CR then sits at the end of the last cell of a CRLF row and is trimmed.
+# Repeated header names: a header may spell one tag twice with different capitalisation (Rami Levy promotions:
+# MaxQty and MAXQTY; Hazi Hinam prices: BisWeighted and bIsWeighted), because different stores' XML spell it
+# differently. After lowercasing they would collide. The 2nd occurrence is renamed `<name>_2` (3rd `_3`...), in
+# header order, and carried into the bronze maps under `<ScraperName>_2`. Nothing is dropped or merged here;
+# silver (resolve_dup_keys in silver_functions) picks the filled one, or quarantines a conflict.
+# Safety net: if a chunk fails to write, its files are retried one by one; a file that fails alone becomes
+# ONE bronze row with parse_error set (like the scraper's bronze), and the load goes on.
 # Queue mode (since 2026-11-12): the files to load are NOT found by listing the whole bucket. The job takes the
 # versions of the batch that task `claim_batch` marked `running` in workspace.ops.backfill_queue, deletes any
 # bronze rows of those versions' date= folders (so a retry after a crash never doubles rows), and loads exactly
 # those folders' files of this kind. Raw lives in the Ohio bucket next to Databricks; bronze is a managed table.
 
 import csv
+import re
 
 dbutils.widgets.text("kind", "price")
 dbutils.widgets.text("path_contains", "")  # test only: load just the files whose path contains this text
@@ -151,6 +159,39 @@ def rename_sql(mapping):
     return "map(" + ", ".join(f"'{k}', '{v}'" for k, v in mapping.items()) + ")"
 
 
+def dedup_names(names):
+    """Header names as the SQL sees them: lowercase, CR trimmed, a repeated name gets _2, _3... in header order."""
+    seen, out = {}, []
+    for n in names:
+        low = n.rstrip("\r").lower()
+        seen[low] = seen.get(low, 0) + 1
+        out.append(low if seen[low] == 1 else f"{low}_{seen[low]}")
+    return out
+
+
+def dup_suffix(name):
+    """('maxqty', 2) for 'maxqty_2'; None when the name has no _2.._9 suffix."""
+    m = re.match(r"^(.+)_([2-9])$", name)
+    return (m.group(1), int(m.group(2))) if m else None
+
+
+def dup_pairs(pairs, present):
+    """For every (target, expression) whose columns have a repeated twin (`col_2`...) in `present`, one more pair
+    (target_2, same expression over the twins). Only the twins that exist are used."""
+    out = []
+    for target, expr in pairs:
+        idents = [i for i in re.findall(r"[A-Za-z_][A-Za-z0-9_]*", expr) if i != "coalesce"]
+        for n in range(2, 10):
+            twins = [f"{i}_{n}" for i in idents if f"{i}_{n}" in present]
+            if twins:
+                out.append((f"{target}_{n}", q(twins[0]) if len(twins) == 1 else f"coalesce({', '.join(q(t) for t in twins)})"))
+    return out
+
+
+def with_dups(pairs, present):
+    return pairs + dup_pairs(pairs, present)
+
+
 def plain_pairs(mapping, present):
     """(target key, expression) for the columns present. Two Kaggle spellings of one key are coalesced:
     a map with a repeated key is an error in Spark."""
@@ -180,14 +221,22 @@ numbered AS (
          row_number() OVER (PARTITION BY file_path ORDER BY mid) AS rn
   FROM {raw_view}
 ),
+named AS (
+  -- the header names, lowercase; a name that repeats (case-insensitively) gets _2, _3... in header order
+  SELECT file_path, modified_at, mid, cells,
+         transform(hn0, (x, i) -> CASE WHEN size(filter(slice(hn0, 1, i), y -> y = x)) = 0 THEN x
+                                       ELSE concat(x, '_', size(filter(slice(hn0, 1, i), y -> y = x)) + 1) END) AS hn
+  FROM (SELECT *, transform(filter(hdr_cells, x -> x IS NOT NULL), x -> lower(rtrim(char(13), x))) AS hn0
+        FROM numbered
+        WHERE rn > 1)
+),
 mapped AS (
   SELECT file_path, modified_at, mid,
          map_from_arrays(
-           transform(filter(hdr_cells, x -> x IS NOT NULL), x -> lower(rtrim(char(13), x))),
-           transform(slice(cells, 1, size(filter(hdr_cells, x -> x IS NOT NULL))),
-                     (x, i) -> CASE WHEN i = size(filter(hdr_cells, x -> x IS NOT NULL)) - 1 THEN rtrim(char(13), x) ELSE x END)) AS m
-  FROM numbered
-  WHERE rn > 1
+           hn,
+           transform(slice(cells, 1, size(hn)),
+                     (x, i) -> CASE WHEN i = size(hn) - 1 THEN rtrim(char(13), x) ELSE x END)) AS m
+  FROM named
 ),
 cols AS (
   SELECT file_path, modified_at, mid,
@@ -223,9 +272,10 @@ def price_or_store_sql(kind, keys, raw_view="raw0"):
     present = set(keys)
     known = set(header_map) | set(field_map) | {"file_name"}
     # a column we have no scraper name for is kept under its own (lowercase) name rather than dropped
-    extra = [(k, q(k)) for k in keys if k not in known]
-    header = map_sql(plain_pairs(header_map, present))
-    fields = map_sql(plain_pairs(field_map, present) + extra)
+    # (a repeated twin `col_2` of a known column is carried through with_dups instead)
+    extra = [(k, q(k)) for k in keys if k not in known and not (dup_suffix(k) and dup_suffix(k)[0] in known)]
+    header = map_sql(with_dups(plain_pairs(header_map, present), present))
+    fields = map_sql(with_dups(plain_pairs(field_map, present), present) + extra)
     if kind == "price":
         shape = f"""CAST(NULL AS STRING) AS declared_count,
   CAST(NULL AS INT) AS tags_in_file,
@@ -260,9 +310,10 @@ def promo_sql(keys, raw_view="raw0"):
         f"flatten(transform(g_arr, gg -> transform({variant_array('gg', '$.promotionitems.promotionitem')}, it -> "
         f"map_concat(map_filter({item_map('gg')}, (k, x) -> k <> 'promotionitems'), {item_map('it')}))))"
     )
-    header = map_sql(plain_pairs(PROMO_HEADER, set(keys)))
-    groups_promo = map_sql(PROMO_GROUPS_ONLY + PROMO_COMMON)
-    flat_promo = map_sql(PROMO_FLAT_ONLY + PROMO_COMMON)
+    present = set(keys)
+    header = map_sql(with_dups(plain_pairs(PROMO_HEADER, present), present))
+    groups_promo = map_sql(with_dups(PROMO_GROUPS_ONLY + PROMO_COMMON, present))
+    flat_promo = map_sql(with_dups(PROMO_FLAT_ONLY + PROMO_COMMON, present))
     return f"""WITH {fill_sql(keys, raw_view).lstrip()},
 js AS (
   SELECT *,
@@ -364,14 +415,26 @@ if not new_paths:
 # COMMAND ----------
 
 # Column names of every new file, from the header line of each (a cheap text scan, not a CSV parse)
-header_lines = [r.value for r in spark.read.text(new_paths).where(F.col("value").startswith("found_folder,")).distinct().collect()]
+header_rows = (spark.read.text(new_paths).where(F.col("value").startswith("found_folder,"))
+               .select("value", F.col("_metadata.file_path").alias("p")).distinct().collect())
 all_names = set()
-for line in header_lines:
-    names = [c.lower() for c in next(csv.reader([line]))]
+renamed_logged = set()
+for r in header_rows:
+    orig = [c.rstrip("\r") for c in next(csv.reader([r.value]))]
+    names = dedup_names(orig)
     assert len(names) < N_COLS, f"header with {len(names)} columns, raise N_COLS"
     all_names |= set(names)
+    if r.p not in renamed_logged:
+        for i, (o, n) in enumerate(zip(orig, names)):
+            if n != o.lower():
+                first = names.index(n.rsplit("_", 1)[0]) if n.rsplit("_", 1)[0] in names else None
+                print(f"RENAMED repeated header name in {r.p}: column {i + 1} '{o}' -> '{n}'"
+                      f" (first spelling: column {None if first is None else first + 1} '{None if first is None else orig[first]}')")
+                renamed_logged.add(r.p)
 all_names.discard("found_folder")
-unknown = sorted(all_names - known_keys(KIND))
+dups = sorted(n for n in all_names if dup_suffix(n) and dup_suffix(n)[0] in all_names)
+unknown = sorted(n for n in all_names - known_keys(KIND) if n not in dups or dup_suffix(n)[0] not in known_keys(KIND))
+print("repeated header names (kept in bronze as <name>_2 ...):", dups or "none")
 print("columns without a scraper name (kept under their own lowercase name):", unknown or "none")
 keys = sorted(all_names | known_keys(KIND))
 sql_text = build_sql(KIND, keys)
@@ -379,19 +442,68 @@ sql_text = build_sql(KIND, keys)
 # COMMAND ----------
 
 schema = ", ".join(f"_c{i} STRING" for i in range(N_COLS))
-total = 0
-for start in range(0, len(new_paths), FILES_PER_WRITE):
-    chunk = new_paths[start:start + FILES_PER_WRITE]
+
+
+def read_raw(paths):
     raw = (spark.read.schema(schema)
            .option("header", "false").option("multiLine", "true")
            .option("quote", '"').option("escape", '"')
            .option("lineSep", chr(10))
-           .csv(chunk)
+           .csv(paths)
            .selectExpr("*", "_metadata.file_path AS file_path", "_metadata.file_modification_time AS modified_at",
                        "monotonically_increasing_id() AS mid"))
     raw.createOrReplaceTempView("raw0")
+
+
+def write_files(paths):
+    read_raw(paths)
     spark.sql(sql_text).write.format("delta").mode("append").saveAsTable(CFG["table"])
+
+
+def sql_str(text):
+    return "'" + str(text).replace("\\", "\\\\").replace("'", "''") + "'"
+
+
+def write_error_row(path, error):
+    """One bronze row for a file that can't be loaded: parse_error set, everything else NULL (same shape as the scraper's)."""
+    common = (f"{sql_str(path)} AS file_path, regexp_extract({sql_str(path)}, '([^/]+)$', 1) AS file_name, 'kaggle' AS source, "
+              f"regexp_extract({sql_str(path)}, 'chain=([^/]+)', 1) AS chain, "
+              f"to_date(regexp_extract({sql_str(path)}, 'date=([0-9]{{4}}-[0-9]{{2}}-[0-9]{{2}})', 1)) AS collected_date, "
+              f"CAST(NULL AS TIMESTAMP) AS modified_at")
+    err = f"{sql_str(error)} AS parse_error"
+    hdr = "CAST(NULL AS MAP<STRING,STRING>)"
+    if KIND == "price":
+        body = (f"CAST(NULL AS STRING) AS declared_count, CAST(NULL AS INT) AS tags_in_file, {err}, {hdr} AS header, "
+                f"{hdr} AS fields, current_timestamp() AS loaded_at")
+    elif KIND == "store":
+        body = f"CAST(NULL AS INT) AS tags_in_file, {err}, {hdr} AS header, {hdr} AS fields, current_timestamp() AS loaded_at"
+    else:
+        body = (f"CAST(NULL AS STRING) AS declared_count, CAST(NULL AS INT) AS promotions_in_file, CAST(NULL AS INT) AS items_in_file, "
+                f"{err}, {hdr} AS header, CAST(NULL AS INT) AS promotion_seq, {hdr} AS promotion, {hdr} AS item, "
+                f"current_timestamp() AS loaded_at, CAST(NULL AS INT) AS items_in_promotion, CAST(NULL AS BOOLEAN) AS store_wide")
+    spark.sql(f"SELECT {common}, {body}").write.format("delta").mode("append").saveAsTable(CFG["table"])
+
+
+total = 0
+failed_files = []
+for start in range(0, len(new_paths), FILES_PER_WRITE):
+    chunk = new_paths[start:start + FILES_PER_WRITE]
+    try:
+        write_files(chunk)
+    except Exception as chunk_exc:
+        # Safety net: retry file by file; a file that fails alone is recorded as one row with parse_error
+        print(f"CHUNK FAILED ({type(chunk_exc).__name__}), retrying its {len(chunk)} files one by one: {str(chunk_exc)[:300]}")
+        for path in chunk:
+            try:
+                write_files([path])
+            except Exception as file_exc:
+                msg = f"{type(file_exc).__name__}: {str(file_exc)[:500]}"
+                print(f"FILE FAILED, saved as one parse_error row: {path}: {msg}")
+                write_error_row(path, msg)
+                failed_files.append(path)
     total += len(chunk)
     print(f"written {total} of {len(new_paths)} files")
 
+if failed_files:
+    print(f"{len(failed_files)} file(s) saved as parse_error rows:", failed_files)
 print(spark.sql(f"SELECT count(DISTINCT file_path) AS files, count(*) AS rows FROM {CFG['table']} WHERE source = 'kaggle'").first())

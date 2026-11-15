@@ -133,6 +133,10 @@ Notebook `databricks/notebooks/bronze_kaggle.py`, job `kaggle_backfill` (tasks `
 
 How a Kaggle CSV becomes rows: all cells are read as text with `header=false`, because versions have different headers; each file's header is its first row. Every blank cell is filled from the row above inside the same block, in file order (a `.gz` file can't be split, so one task reads it in order); the literal `''` becomes NULL and is never filled. Line ends are mixed in these files (CRLF on the header and some rows, LF on the rest): the reader is told `lineSep = LF`, and the stray CR is trimmed from the last cell. Without that, Spark takes the first line's CRLF as the only separator and merges rows (it lost 11,508 of 325,151 rows of one Shufersal promotion file). Promotion cells hold JSON (single-quoted, Python style, in 2025 versions; double-quoted in 2026; `NO_BODY` = empty element, a single item is an object instead of a list), parsed as `VARIANT`. Three promotion layouts are mapped to the scraper's two: items in `groups` (key spelling of the Groups layout, `PromotionID`), items in `promotionitems` (flat layout, `PromotionId`), and, in one older feed (Victory, Mahsani Ashuk), one promotion + product per row with `itemcode` columns (flat). Two Kaggle spellings of one field are coalesced into the scraper's key (`unitmeasure` and `unitofmeasure` into `UnitOfMeasure`).
 
+**A header that repeats a name (decided by Itai 2026-11-15).** Some Kaggle headers spell one tag twice with different capitalisation, because different stores' XML spell it differently (Rami Levy promotions: `MaxQty` and `MAXQTY`, 2024-12-07 to 2025-01-06; Hazi Hinam prices: `BisWeighted` and `bIsWeighted`, 2024-12-25 to 2025-01-02; a scan of the 868 CSVs of the 30 failed versions found only these two). Lowercased they collide, and Spark stops with `DUPLICATED_MAP_KEY`. Bronze keeps both values: the 2nd occurrence of a name, in header order, becomes `<name>_2` (3rd `_3`, up to `_9`), and it is carried into the same map under the scraper's key plus the suffix (`bIsWeighted_2`, `MaxQty_2`). Nothing is dropped or merged in bronze, and every rename is printed in the task log (`RENAMED repeated header name in <file>: ...`). In the source files measured, only one of the two columns is ever filled inside a block, so there is no real conflict. **Silver resolves it** on the whole map before any field is read (SQL functions `workspace.silver.resolve_dup_keys` and `has_dup_conflict`, created by task `create_functions` of `silver_load`): only `X` filled gives `X`, only `X_2` gives `X_2`, both equal give that value, both filled and different send the row to quarantine with `reject_reason = 'duplicate_column_conflict'` (`silver.quarantine` or `silver.promotion_quarantine`, original maps kept). DQ check `duplicate_column_conflicts`: WARNING above 0, never FAIL.
+
+**Safety net.** If a chunk of 30 files fails to write, the loader retries that chunk file by file; a file that fails alone becomes one bronze row with `parse_error` set to the error text and every other column NULL (the same shape as the scraper's), and the load goes on. Silver already sends such rows to quarantine as `file_not_readable`.
+
 Loading is driven by the queue (next section), not by listing the bucket: each task deletes the bronze rows of the batch's `date=` folders first, then loads exactly those folders' files, 30 files per write. A re-run of a batch therefore ends with the same rows, never double.
 
 ### Backfill queue: `workspace.ops.backfill_queue`
@@ -240,7 +244,7 @@ Managed Delta table, written by `silver_price_obs.py`. One row per rejected bron
 | Column | Type | Meaning |
 |---|---|---|
 | `row_key` | STRING | SHA-256 of the file path, the row's values and any parse error |
-| `reject_reason` | STRING | `file_not_readable`, `wrong_chain`, `no_file_date`, `no_store_id`, `no_item_code`, `price_not_a_number` or `price_zero_or_less` |
+| `reject_reason` | STRING | `file_not_readable`, `duplicate_column_conflict` (Kaggle: a repeated header name filled with different values, see "A header that repeats a name"), `wrong_chain`, `no_file_date`, `no_store_id`, `no_item_code`, `price_not_a_number` or `price_zero_or_less` |
 | `chain` | STRING | Chain, from the S3 folder |
 | `source` | STRING | `scraper` or `kaggle` |
 | `chain_id` | STRING | Chain ID published in the file |
@@ -295,7 +299,7 @@ Managed Delta table, clustered by `file_date` and `chain`, built by `databricks/
 
 **Store-wide promotions are not here:** bronze rows with `store_wide` = true have no product, so this task skips them (they are not rejected as `no_item_code`) and writes them to `silver.store_wide_promotions` instead.
 
-**Rejected, stored in `silver.promotion_quarantine`:** a file that failed to parse, a file with no promotions, a chain ID that differs from the chain's ID in `silver.stores`, no file date, store ID, promotion ID or barcode, or a negative price. It has the columns of `silver.quarantine` plus `promotion_id`, with `promotion` and `item` in place of `fields`, and it is separate because the price checks in `silver_dq` count the rows of `silver.quarantine`. A price of 0 or a missing price isn't rejected: many promotions give only a discount percent or a gift.
+**Rejected, stored in `silver.promotion_quarantine`:** a file that failed to parse, a Kaggle row whose repeated header name holds different values (`duplicate_column_conflict`), a file with no promotions, a chain ID that differs from the chain's ID in `silver.stores`, no file date, store ID, promotion ID or barcode, or a negative price. It has the columns of `silver.quarantine` plus `promotion_id`, with `promotion` and `item` in place of `fields`, and it is separate because the price checks in `silver_dq` count the rows of `silver.quarantine`. A price of 0 or a missing price isn't rejected: many promotions give only a discount percent or a gift.
 
 | Column | Type | Meaning |
 |---|---|---|
@@ -439,6 +443,7 @@ Managed Delta table, written by `databricks/notebooks/silver_dq.py` (job `silver
 | `chain_without_price_files` | file | - | 0 | 0, PASS |
 | `kaggle_vs_scraper_file_mismatch` | file | 0 | - | see below |
 | `price_store_completeness` | file | 0 | - | 0, PASS |
+| `duplicate_column_conflicts` | row | 0 | - | new 2026-11-15; rows with `duplicate_column_conflict` in `quarantine` and `promotion_quarantine`, WARNING above 0 |
 | `promotion_repeated_keys` | row | - | 0 | 0, PASS |
 | `promotion_reject_percent` | row | 0.1 | 5 | 0.00003, PASS |
 | `promotion_expired_percent` | business | 0.1 | - | 0, PASS |

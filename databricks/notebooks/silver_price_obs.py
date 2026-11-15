@@ -1,6 +1,7 @@
 # Databricks notebook source
 from datetime import datetime
 
+# The SQL functions resolve_dup_keys / has_dup_conflict come from silver_functions (task create_functions)
 spark.sql("""
 CREATE TABLE IF NOT EXISTS workspace.silver.price_obs (
   chain STRING,
@@ -100,15 +101,29 @@ base AS (
     b.parse_error,
     b.header,
     b.fields,
+    b.header_orig,
+    b.fields_orig,
+    b.dup_conflict,
     b.fields['ItemPrice'] AS price_raw,
     e.expected_chain_id
-  FROM workspace.bronze.price_items b
+  FROM (
+    -- Kaggle files can spell one tag twice (X and X_2 in bronze): resolve once here, keep the originals
+    SELECT p.* EXCEPT (header, fields),
+           workspace.silver.resolve_dup_keys(p.header) AS header,
+           workspace.silver.resolve_dup_keys(p.fields) AS fields,
+           p.header AS header_orig,
+           p.fields AS fields_orig,
+           workspace.silver.has_dup_conflict(p.header) OR workspace.silver.has_dup_conflict(p.fields) AS dup_conflict
+    FROM workspace.bronze.price_items p
+    WHERE p.loaded_at > :last_load
+  ) b
   LEFT JOIN expected e ON b.chain = e.chain
   WHERE b.loaded_at > :last_load
 )
 SELECT *,
   CASE
     WHEN parse_error IS NOT NULL THEN 'file_not_readable'
+    WHEN dup_conflict THEN 'duplicate_column_conflict'
     WHEN NOT (chain_id <=> expected_chain_id) THEN 'wrong_chain'
     WHEN file_date IS NULL THEN 'no_file_date'
     WHEN store_id IS NULL OR store_id = '' THEN 'no_store_id'
@@ -128,10 +143,10 @@ spark.sql("""
 MERGE INTO workspace.silver.quarantine AS t
 USING (
   SELECT
-    sha2(concat_ws('|', source_file, to_json(fields), parse_error), 256) AS row_key,
+    sha2(concat_ws('|', source_file, to_json(fields_orig), parse_error), 256) AS row_key,
     reject_reason, chain, source, chain_id, store_id, item_code, price_raw,
     parse_error, file_date, source_file, collected_date, modified_at,
-    bronze_loaded_at, header, fields,
+    bronze_loaded_at, header_orig AS header, fields_orig AS fields,
     current_timestamp() AS quarantined_at
   FROM classified
   WHERE reject_reason IS NOT NULL
@@ -145,7 +160,7 @@ WHEN NOT MATCHED THEN INSERT *
 spark.sql("""
 MERGE INTO workspace.silver.price_obs AS t
 USING (
-  SELECT * EXCEPT (parse_error, header, fields, price_raw, expected_chain_id, reject_reason)
+  SELECT * EXCEPT (parse_error, header, fields, header_orig, fields_orig, dup_conflict, price_raw, expected_chain_id, reject_reason)
   FROM classified
   WHERE reject_reason IS NULL
   QUALIFY row_number() OVER (

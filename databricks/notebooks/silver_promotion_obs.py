@@ -175,18 +175,32 @@ base AS (
     b.promotion_seq,
     b.header,
     b.promotion,
+    b.header_orig,
+    b.promotion_orig,
+    b.dup_conflict,
     b.item,
     coalesce(b.store_wide, false) AS store_wide,
     b.items_in_promotion,
     coalesce(b.item['DiscountedPrice'], b.promotion['DiscountedPrice']) AS price_raw,
     e.expected_chain_id
-  FROM workspace.bronze.promotion_items b
+  FROM (
+    -- Kaggle files can spell one tag twice (X and X_2 in bronze): resolve once here, keep the originals
+    SELECT p.* EXCEPT (header, promotion),
+           workspace.silver.resolve_dup_keys(p.header) AS header,
+           workspace.silver.resolve_dup_keys(p.promotion) AS promotion,
+           p.header AS header_orig,
+           p.promotion AS promotion_orig,
+           workspace.silver.has_dup_conflict(p.header) OR workspace.silver.has_dup_conflict(p.promotion) AS dup_conflict
+    FROM workspace.bronze.promotion_items p
+    WHERE p.loaded_at > least(:last_load, :last_load_sw)
+  ) b
   LEFT JOIN expected e ON b.chain = e.chain
   WHERE b.loaded_at > least(:last_load, :last_load_sw)
 )
 SELECT *,
   CASE
     WHEN parse_error IS NOT NULL THEN 'file_not_readable'
+    WHEN dup_conflict THEN 'duplicate_column_conflict'
     WHEN promotion IS NULL THEN 'file_has_no_promotions'
     WHEN NOT (chain_id <=> expected_chain_id) THEN 'wrong_chain'
     WHEN file_date IS NULL THEN 'no_file_date'
@@ -210,7 +224,7 @@ USING (
     sha2(concat_ws('|', source_file, promotion_seq, to_json(item), parse_error), 256) AS row_key,
     reject_reason, chain, source, chain_id, store_id, promotion_id, item_code, price_raw,
     parse_error, file_date, source_file, collected_date, modified_at,
-    bronze_loaded_at, header, promotion, item,
+    bronze_loaded_at, header_orig AS header, promotion_orig AS promotion, item,
     current_timestamp() AS quarantined_at
   FROM classified
   WHERE reject_reason IS NOT NULL AND bronze_loaded_at > :last_load
@@ -226,8 +240,8 @@ WHEN NOT MATCHED THEN INSERT *
 spark.sql("""
 MERGE INTO workspace.silver.promotion_obs AS t
 USING (
-  SELECT * EXCEPT (parse_error, promotion_seq, header, promotion, item, price_raw, expected_chain_id, reject_reason,
-                   store_wide, items_in_promotion)
+  SELECT * EXCEPT (parse_error, promotion_seq, header, promotion, header_orig, promotion_orig, dup_conflict, item,
+                   price_raw, expected_chain_id, reject_reason, store_wide, items_in_promotion)
   FROM classified
   WHERE reject_reason IS NULL AND NOT store_wide AND bronze_loaded_at > :last_load
   QUALIFY row_number() OVER (

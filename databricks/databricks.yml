@@ -35,17 +35,22 @@ resources:
     silver_load:
       name: silver_load
       tasks:
+        - task_key: create_functions
+          notebook_task:
+            notebook_path: ./notebooks/silver_functions.py
         - task_key: build_stores
           notebook_task:
             notebook_path: ./notebooks/silver_stores.py
         - task_key: build_price_obs
           depends_on:
             - task_key: build_stores
+            - task_key: create_functions
           notebook_task:
             notebook_path: ./notebooks/silver_price_obs.py
         - task_key: build_promotion_obs
           depends_on:
             - task_key: build_stores
+            - task_key: create_functions
           notebook_task:
             notebook_path: ./notebooks/silver_promotion_obs.py
         - task_key: build_price_history
