@@ -292,10 +292,25 @@ def price_or_store_sql(kind, keys, raw_view="raw0"):
     return f"WITH {fill_sql(keys, raw_view).lstrip()}\nSELECT {COMMON_SELECT},\n  {shape}\nFROM clean"
 
 
+def vget(variant, name):
+    """The value of key `name` in a JSON object variant, whatever the key's capitalisation (Dec 2024 files:
+    Item, ItemCode, ClubId; Nov-Dec 2025 files: item, itemcode, clubid). NULL when absent or not an object."""
+    return (f"try_element_at(map_values(map_filter(try_variant_get({variant}, '$', 'map<string,variant>'), "
+            f"(k, x) -> lower(k) = '{name}')), 1)")
+
+
+def vpath(variant, path):
+    """vget along a dotted path such as '$.promotionitems.promotionitem'."""
+    for name in path.lstrip("$.").split("."):
+        variant = vget(variant, name)
+    return variant
+
+
 def variant_array(variant, path):
     """Items under `path` of a JSON variant: an object becomes a 1-element list; no value gives an empty list."""
-    return (f"filter(coalesce(try_variant_get({variant}, '{path}', 'array<variant>'), "
-            f"array(try_variant_get({variant}, '{path}', 'variant'))), x -> x IS NOT NULL)")
+    v = vpath(variant, path)
+    return (f"filter(coalesce(try_variant_get({v}, '$', 'array<variant>'), "
+            f"array(try_variant_get({v}, '$', 'variant'))), x -> x IS NOT NULL)")
 
 
 def promo_sql(keys, raw_view="raw0"):
@@ -303,7 +318,7 @@ def promo_sql(keys, raw_view="raw0"):
 
     def item_map(v):
         # the JSON's own field names -> scraper names; NO_BODY (an empty element) is dropped
-        return (f"map_filter(transform_keys(try_cast({v} AS map<string,string>), (k, x) -> coalesce(element_at({item_names}, k), k)), "
+        return (f"map_filter(transform_keys(try_cast({v} AS map<string,string>), (k, x) -> coalesce(element_at({item_names}, lower(k)), lower(k))), "
                 f"(k, x) -> x IS NOT NULL AND x <> 'NO_BODY')")
 
     group_items = (
@@ -327,11 +342,11 @@ parts AS (
   SELECT *,
     {variant_array('gv', '$.group')} AS g_arr,
     {variant_array('pv', '$.item')} AS p_arr,
-    coalesce(array_join(try_variant_get(cv, '$.clubid', 'array<string>'), '|'), try_variant_get(cv, '$.clubid', 'string')) AS club_ids,
-    try_variant_get(av, '$.additionaliscoupon', 'string') AS av_coupon,
-    try_variant_get(av, '$.additionalgiftcount', 'string') AS av_gift,
-    try_variant_get(av, '$.additionalistotal', 'string') AS av_total,
-    try_variant_get(av, '$.additionalisactive', 'string') AS av_active
+    coalesce(array_join(try_variant_get({vget('cv', 'clubid')}, '$', 'array<string>'), '|'), try_variant_get({vget('cv', 'clubid')}, '$', 'string')) AS club_ids,
+    try_variant_get({vget('av', 'additionaliscoupon')}, '$', 'string') AS av_coupon,
+    try_variant_get({vget('av', 'additionalgiftcount')}, '$', 'string') AS av_gift,
+    try_variant_get({vget('av', 'additionalistotal')}, '$', 'string') AS av_total,
+    try_variant_get({vget('av', 'additionalisactive')}, '$', 'string') AS av_active
   FROM js
 ),
 counted AS (
