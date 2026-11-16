@@ -99,9 +99,13 @@ FROM workspace.silver.promotion_obs
 
 # Optional one-off re-read after a rule change: job parameter reload_after (a timestamp)
 # moves the watermark back. Safe to re-read, because both MERGEs skip rows already saved.
+# reload_chain: read only this chain from bronze (watermark = reload_after, or 1900-01-01 if empty)
 dbutils.widgets.text("reload_after", "")
-if dbutils.widgets.get("reload_after"):
-    last_load = dbutils.widgets.get("reload_after")
+dbutils.widgets.text("reload_chain", "")
+reload_chain = dbutils.widgets.get("reload_chain")
+reload_mark = dbutils.widgets.get("reload_after") or ("1900-01-01 00:00:00" if reload_chain else "")
+if reload_mark:
+    last_load = reload_mark
 
 print("Reading bronze rows loaded after", last_load)
 
@@ -109,8 +113,8 @@ last_load_sw = spark.sql("""
 SELECT coalesce(max(bronze_loaded_at), TIMESTAMP'1900-01-01') AS t
 FROM workspace.silver.store_wide_promotions
 """).first()["t"]
-if dbutils.widgets.get("reload_after"):
-    last_load_sw = dbutils.widgets.get("reload_after")
+if reload_mark:
+    last_load_sw = reload_mark
 
 # COMMAND ----------
 
@@ -192,25 +196,35 @@ base AS (
            p.promotion AS promotion_orig,
            workspace.silver.has_dup_conflict(p.header) OR workspace.silver.has_dup_conflict(p.promotion) AS dup_conflict
     FROM workspace.bronze.promotion_items p
-    WHERE p.loaded_at > least(:last_load, :last_load_sw)
+    WHERE p.loaded_at > least(:last_load, :last_load_sw) AND (:reload_chain = '' OR p.chain = :reload_chain)
   ) b
   LEFT JOIN expected e ON b.chain = e.chain
   WHERE b.loaded_at > least(:last_load, :last_load_sw)
+),
+base_ok AS (
+  -- chain_ok: the header ChainID is the chain's own, or a documented alias valid on the file date
+  -- (silver.chain_id_aliases, created in silver_functions)
+  SELECT base.*,
+    (base.chain_id <=> base.expected_chain_id
+     OR EXISTS (SELECT 1 FROM workspace.silver.chain_id_aliases a
+                WHERE a.chain = base.chain AND a.chain_id = base.chain_id
+                  AND base.file_date BETWEEN a.valid_from AND a.valid_to)) AS chain_ok
+  FROM base
 )
 SELECT *,
   CASE
     WHEN parse_error IS NOT NULL THEN 'file_not_readable'
     WHEN dup_conflict THEN 'duplicate_column_conflict'
     WHEN promotion IS NULL THEN 'file_has_no_promotions'
-    WHEN NOT (chain_id <=> expected_chain_id) THEN 'wrong_chain'
+    WHEN NOT chain_ok THEN 'wrong_chain'
     WHEN file_date IS NULL THEN 'no_file_date'
     WHEN store_id IS NULL OR store_id = '' THEN 'no_store_id'
     WHEN promotion_id IS NULL THEN 'no_promotion_id'
     WHEN item_code IS NULL AND NOT store_wide THEN 'no_item_code'
     WHEN discounted_price < 0 THEN 'price_negative'
   END AS reject_reason
-FROM base
-""", args={"last_load": last_load, "last_load_sw": last_load_sw})
+FROM base_ok
+""", args={"last_load": last_load, "last_load_sw": last_load_sw, "reload_chain": reload_chain})
 
 classified.createOrReplaceTempView("classified")
 
@@ -241,7 +255,7 @@ spark.sql("""
 MERGE INTO workspace.silver.promotion_obs AS t
 USING (
   SELECT * EXCEPT (parse_error, promotion_seq, header, promotion, header_orig, promotion_orig, dup_conflict, item,
-                   price_raw, expected_chain_id, reject_reason, store_wide, items_in_promotion)
+                   price_raw, expected_chain_id, chain_ok, reject_reason, store_wide, items_in_promotion)
   FROM classified
   WHERE reject_reason IS NULL AND NOT store_wide AND bronze_loaded_at > :last_load
   QUALIFY row_number() OVER (

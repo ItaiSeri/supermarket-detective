@@ -64,6 +64,18 @@ FROM workspace.silver.price_obs
 if spark.table("workspace.silver.quarantine").limit(1).count() == 0:
     last_load = datetime(1900, 1, 1)
 
+# Optional one-off re-read after a rule change (empty = normal incremental run):
+#   reload_after : timestamp, moves the watermark back
+#   reload_chain : read only this chain from bronze (watermark = reload_after, or 1900-01-01 if empty)
+# Safe to re-read, because the MERGEs skip rows already saved.
+dbutils.widgets.text("reload_after", "")
+dbutils.widgets.text("reload_chain", "")
+reload_chain = dbutils.widgets.get("reload_chain")
+if reload_chain:
+    last_load = dbutils.widgets.get("reload_after") or "1900-01-01 00:00:00"
+elif dbutils.widgets.get("reload_after"):
+    last_load = dbutils.widgets.get("reload_after")
+
 print("Reading bronze rows loaded after", last_load)
 
 # COMMAND ----------
@@ -115,24 +127,34 @@ base AS (
            p.fields AS fields_orig,
            workspace.silver.has_dup_conflict(p.header) OR workspace.silver.has_dup_conflict(p.fields) AS dup_conflict
     FROM workspace.bronze.price_items p
-    WHERE p.loaded_at > :last_load
+    WHERE p.loaded_at > :last_load AND (:reload_chain = '' OR p.chain = :reload_chain)
   ) b
   LEFT JOIN expected e ON b.chain = e.chain
   WHERE b.loaded_at > :last_load
+),
+base_ok AS (
+  -- chain_ok: the header ChainID is the chain's own, or a documented alias valid on the file date
+  -- (silver.chain_id_aliases, created in silver_functions)
+  SELECT base.*,
+    (base.chain_id <=> base.expected_chain_id
+     OR EXISTS (SELECT 1 FROM workspace.silver.chain_id_aliases a
+                WHERE a.chain = base.chain AND a.chain_id = base.chain_id
+                  AND base.file_date BETWEEN a.valid_from AND a.valid_to)) AS chain_ok
+  FROM base
 )
 SELECT *,
   CASE
     WHEN parse_error IS NOT NULL THEN 'file_not_readable'
     WHEN dup_conflict THEN 'duplicate_column_conflict'
-    WHEN NOT (chain_id <=> expected_chain_id) THEN 'wrong_chain'
+    WHEN NOT chain_ok THEN 'wrong_chain'
     WHEN file_date IS NULL THEN 'no_file_date'
     WHEN store_id IS NULL OR store_id = '' THEN 'no_store_id'
     WHEN item_code IS NULL THEN 'no_item_code'
     WHEN price IS NULL THEN 'price_not_a_number'
     WHEN price <= 0 THEN 'price_zero_or_less'
   END AS reject_reason
-FROM base
-""", args={"last_load": last_load})
+FROM base_ok
+""", args={"last_load": last_load, "reload_chain": reload_chain})
 
 classified.createOrReplaceTempView("classified")
 
@@ -160,7 +182,7 @@ WHEN NOT MATCHED THEN INSERT *
 spark.sql("""
 MERGE INTO workspace.silver.price_obs AS t
 USING (
-  SELECT * EXCEPT (parse_error, header, fields, header_orig, fields_orig, dup_conflict, price_raw, expected_chain_id, reject_reason)
+  SELECT * EXCEPT (parse_error, header, fields, header_orig, fields_orig, dup_conflict, price_raw, expected_chain_id, chain_ok, reject_reason)
   FROM classified
   WHERE reject_reason IS NULL
   QUALIFY row_number() OVER (

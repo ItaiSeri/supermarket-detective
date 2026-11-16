@@ -68,3 +68,19 @@ print(test)
 assert (test.only_first, test.only_second, test.equal, test.empty_first) == ("3", "5", "4", "6")
 assert test.conflict and not test.no_conflict_equal and not test.no_conflict_other_key and not test.null_map
 assert test.untouched == 2
+
+# COMMAND ----------
+
+# Chain ID aliases: a chain whose files carried another ChainID in the past. Silver's wrong_chain check
+# (price_obs, promotion_obs, items) accepts a row when its header ChainID equals the chain's own ID OR an alias row
+# matches the chain, the ID and the file date. Rows keep the original chain_id value (provenance).
+# CREATE OR REPLACE + INSERT, so re-running gives the same table.
+spark.sql("""
+CREATE OR REPLACE TABLE workspace.silver.chain_id_aliases (
+  chain STRING, chain_id STRING, valid_from DATE, valid_to DATE, reason STRING)
+""")
+spark.sql("""
+INSERT INTO workspace.silver.chain_id_aliases VALUES (
+  'YAYNO_BITAN_AND_CARREFOUR', '7290725900003', DATE'2024-01-01', DATE'2025-07-13',
+  'Legacy Yayno Bitan chain ID in Kaggle files before the Carrefour feed; 19 shared store numbers have identical address+ZIP, 9 others unused by the new ID; checked 2026-11-16')
+""")

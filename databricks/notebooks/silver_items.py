@@ -34,6 +34,18 @@ SELECT coalesce(max(bronze_loaded_at), TIMESTAMP'1900-01-01') AS t
 FROM workspace.silver.items
 """).first()["t"]
 
+# Optional one-off re-read after a rule change (empty = normal incremental run):
+#   reload_after : timestamp, moves the watermark back
+#   reload_chain : read only this chain from bronze (watermark = reload_after, or 1900-01-01 if empty)
+# Safe to re-read: the items MERGE only widens dates, chains and names.
+dbutils.widgets.text("reload_after", "")
+dbutils.widgets.text("reload_chain", "")
+reload_chain = dbutils.widgets.get("reload_chain")
+if reload_chain:
+    last_load = dbutils.widgets.get("reload_after") or "1900-01-01 00:00:00"
+elif dbutils.widgets.get("reload_after"):
+    last_load = dbutils.widgets.get("reload_after")
+
 print("Reading bronze rows loaded after", last_load)
 
 # COMMAND ----------
@@ -71,12 +83,23 @@ base AS (
     e.expected_chain_id
   FROM workspace.bronze.price_items b
   LEFT JOIN expected e ON b.chain = e.chain
-  WHERE b.loaded_at > :last_load
+  WHERE b.loaded_at > :last_load AND (:reload_chain = '' OR b.chain = :reload_chain)
 ),
+base_ok AS (
+  -- chain_ok: the header ChainID is the chain's own, or a documented alias valid on the file date
+  -- (silver.chain_id_aliases, created in silver_functions)
+  SELECT base.*,
+    (base.chain_id <=> base.expected_chain_id
+     OR EXISTS (SELECT 1 FROM workspace.silver.chain_id_aliases a
+                WHERE a.chain = base.chain AND a.chain_id = base.chain_id
+                  AND base.file_date BETWEEN a.valid_from AND a.valid_to)) AS chain_ok
+  FROM base
+)
+,
 kept AS (
-  SELECT * FROM base
+  SELECT * FROM base_ok
   WHERE parse_error IS NULL
-    AND chain_id <=> expected_chain_id
+    AND chain_ok
     AND file_date IS NOT NULL
     AND store_id IS NOT NULL AND store_id <> ''
     AND item_code IS NOT NULL
@@ -85,7 +108,7 @@ kept AS (
 SELECT *,
   CASE WHEN item_type = '1' OR item_code RLIKE '^([0-9]{8}|[0-9]{12,13})$' THEN 'shared' ELSE 'chain' END AS item_scope
 FROM kept
-""", args={"last_load": last_load})
+""", args={"last_load": last_load, "reload_chain": reload_chain})
 
 incoming_obs.createOrReplaceTempView("incoming_obs")
 
