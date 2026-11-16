@@ -107,7 +107,7 @@ KAGGLE:  Kaggle (Google Cloud, USA) -> Lambda (Ohio) -> raw S3 Ohio -------+  no
 - **New bucket** `supermarket-detective-kaggle-971422709739` in us-east-2: versioning, public access blocked, Intelligent-Tiering, layout `source=kaggle/date=<version date>/chain=<CHAIN>/<name>.gz` + `_manifest/` as before. Read-only external location for Databricks.
 - **Kaggle Lambda + backfill state machine move to us-east-2** (same code). Downloading all ~165 versions up front is cheap (Lambda + ~50 GB S3), so the download is separate from loading.
 - **Bronze becomes managed Delta tables** (Databricks storage, Ohio), same names and columns, via a one-time `DEEP CLONE`; Auto Loader checkpoints kept, so no file loads twice. Bronze stays rebuildable from raw, which stays in our S3. Kaggle rows go into the same bronze tables with `source='kaggle'`.
-- The Tel Aviv `bronze/` prefix is left in place (not deleted) until Itai decides.
+- The Tel Aviv `bronze/` prefix was left in place until Itai decided; on 2026-11-16 the `_ta_external` tables were dropped and their data folders deleted. `bronze/_checkpoints/` stays (live Auto Loader checkpoints).
 - The daily DQ must not scan all of bronze; reconciliation checks look only at the newest files.
 
 **Batch queue (resumable backfill):**
