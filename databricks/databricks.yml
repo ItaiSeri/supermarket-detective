@@ -97,7 +97,8 @@ resources:
       schedule:
         quartz_cron_expression: "0 0/30 * * * ?"
         timezone_id: Asia/Jerusalem
-        pause_status: UNPAUSED
+        # paused 2026-11-16: the backfill finished on 2026-11-15 (157 done, 5 skipped)
+        pause_status: PAUSED
       tasks:
         - task_key: claim_batch
           notebook_task:
