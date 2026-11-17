@@ -145,6 +145,13 @@ figcaption { font-size: 14px; color: var(--muted); max-width: 80ch; }
 .mbox { fill: color-mix(in srgb, var(--daily) 9%, var(--surface)); stroke: var(--daily); stroke-width: 1.4; }
 .vbox { fill: none; stroke: var(--muted); stroke-width: 1.2; stroke-dasharray: 5 3; }
 .lbox { fill: var(--surface); stroke: var(--line); stroke-width: 1.2; }
+/* Section buttons */
+.toc { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; gap: 8px; overflow-x: auto; white-space: nowrap; padding: 10px 0; background: var(--bg); border-bottom: 1px solid var(--line); scrollbar-width: thin; }
+.toc a { flex: none; font: 500 13px var(--font-body); color: var(--ink); text-decoration: none; padding: 5px 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); }
+.toc a:hover { border-color: var(--daily); color: var(--daily); }
+.toc .toc-g { flex: none; font: 600 11px var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-left: 6px; }
+.toc .toc-g:first-child { margin-left: 0; }
+[id] { scroll-margin-top: 84px; }
 a { color: var(--daily); }
 a:focus-visible { outline: 2px solid var(--daily); outline-offset: 2px; }
 
@@ -214,15 +221,22 @@ a:focus-visible { outline: 2px solid var(--daily); outline-offset: 2px; }
 <div class="wrap">
 
 <header class="col">
-  <div class="meta">Data Engineering portfolio · architecture plan · 2026-11-03 · gold design 2026-11-15</div>
+  <div class="meta">Data Engineering portfolio · architecture plan · 2026-11-03 · updated 2026-11-17</div>
   <h1>Supermarket Detective</h1>
   <p class="lede">Israeli supermarket chains must publish every price and promotion, every day. This pipeline collects those files in the cloud, keeps the full price history, and asks questions like: is Eilat really 15.3% cheaper without VAT, and which "promotions" aren't cheaper at all?</p>
-  <p class="muted" style="font-size:15px">Pipeline first, then <a href="#where">where each piece of data lives</a>, then the <a href="#gold">gold layer design</a> (milestone 4): tables, questions and open decisions.</p>
+  <p class="muted" style="font-size:15px">Pipeline first, then <a href="#where">where each piece of data lives</a>, then the <a href="#gold">gold layer design</a> (milestone 4): tables, questions and decisions.</p>
 </header>
 
-<figure>
+<nav class="toc" aria-label="Sections">
+  <span class="toc-g">Pipeline</span>
+  <a href="#pipeline">Diagram</a><a href="#where">Data locations</a><a href="#lanes">Two lanes</a><a href="#history">Price history</a><a href="#stack">Why this stack</a><a href="#cost">Cost</a><a href="#tests">Day-1 tests</a>
+  <span class="toc-g">Gold design</span>
+  <a href="#g-lineage">Lineage</a><a href="#g-tables">Tables</a><a href="#g-finding">First finding</a><a href="#g-questions">Questions</a><a href="#g-decisions">Decisions</a><a href="#g-build">Build order</a>
+</nav>
+
+<figure id="pipeline">
   <div class="scroll">
-  <svg viewBox="0 0 1300 640" role="img" aria-label="Two ingestion lanes in AWS Tel Aviv, a one-off history prep from past Kaggle versions and a daily run from the chain sites and today's Kaggle file, both write to one versioned S3 archive. Databricks reads the S3 archive directly through a read-only external location, and one pipeline builds bronze, silver and gold tables plus operations tables. Power BI reads gold and ops; charts go to X.">
+  <svg viewBox="0 0 1300 640" role="img" aria-label="Two ingestion lanes: a daily run in AWS Tel Aviv that scrapes the chain sites, and a one-off history backfill in AWS Ohio from past Kaggle versions. Each writes to its own versioned S3 bucket. Databricks reads both buckets through read-only external locations, and the job daily_load builds bronze, silver and gold tables plus operations tables. Power BI reads gold; charts go to X.">
     <defs>
       <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="ah"/></marker>
       <marker id="ad" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="ah-d"/></marker>
@@ -241,7 +255,7 @@ a:focus-visible { outline: 2px solid var(--daily); outline-offset: 2px; }
     <text x="226" y="74" class="zlabel">AWS · TEL AVIV + OHIO</text>
     <rect x="716" y="50" width="380" height="574" rx="10" class="zone"/>
     <text x="730" y="74" class="zlabel">DATABRICKS FREE EDITION</text>
-    <text x="730" y="92" class="znote">one Lakeflow pipeline, starts when files arrive</text>
+    <text x="730" y="92" class="znote">job daily_load: bronze → silver → gold</text>
     <rect x="1112" y="50" width="172" height="574" rx="10" class="zone"/>
     <text x="1126" y="74" class="zlabel">POWER BI &amp; X</text>
 
@@ -249,7 +263,7 @@ a:focus-visible { outline: 2px solid var(--daily); outline-offset: 2px; }
     <rect x="32" y="100" width="148" height="78" rx="6" class="box"/>
     <text x="44" y="124" class="bt">Kaggle dataset</text>
     <text x="44" y="144" class="bs">1 version per day</text>
-    <text x="44" y="162" class="bs">sampled, 2024-10-22 on</text>
+    <text x="44" y="162" class="bs">weekly + Hanukkah</text>
 
     <rect x="32" y="300" width="148" height="62" rx="6" class="box"/>
     <text x="44" y="324" class="bt">Chain price sites</text>
@@ -272,11 +286,11 @@ a:focus-visible { outline: 2px solid var(--daily); outline-offset: 2px; }
     <text x="595" y="140" class="znote" text-anchor="middle">Kaggle lane runs in Ohio (us-east-2)</text>
     <rect x="510" y="184" width="170" height="62" rx="6" class="box box-h"/>
     <text x="522" y="208" class="bt">Step Functions</text>
-    <text x="522" y="228" class="bs">Map: file, 5 at a time</text>
+    <text x="522" y="228" class="bs">Distributed Map, 10</text>
 
     <rect x="510" y="300" width="170" height="62" rx="6" class="box box-h"/>
     <text x="522" y="324" class="bt">Lambda fetch_kaggle</text>
-    <text x="522" y="344" class="bs">1 Kaggle file → gzip → S3</text>
+    <text x="522" y="344" class="bs">1 file → gzip → S3</text>
 
     <!-- AWS: shared -->
     <rect x="300" y="420" width="380" height="62" rx="6" class="box"/>
@@ -286,32 +300,32 @@ a:focus-visible { outline: 2px solid var(--daily); outline-offset: 2px; }
     <!-- Databricks: medallion stacked bottom-up -->
     <rect x="732" y="540" width="210" height="62" rx="6" class="box"/>
     <text x="744" y="564" class="bt">External location</text>
-    <text x="744" y="584" class="bs">raw_scraper (Tel Aviv), raw_kaggle_ohio</text>
+    <text x="744" y="584" class="bs">raw_scraper, raw_kaggle_ohio</text>
 
     <rect x="732" y="420" width="210" height="62" rx="6" class="box"/>
     <text x="744" y="444" class="bt">Bronze: prices, stores, promos</text>
-    <text x="744" y="464" class="bs">managed Delta, Ohio · text, 1 row/product (store-wide promo: 1 row)</text>
+    <text x="744" y="464" class="bs">managed Delta, Ohio</text>
 
     <rect x="732" y="290" width="210" height="78" rx="6" class="box"/>
     <text x="744" y="314" class="bt">Silver</text>
-    <text x="744" y="334" class="bs">stores, items, prices, promos</text>
+    <text x="744" y="334" class="bs">stores, items, prices, deals</text>
     <text x="744" y="352" class="bs">SCD2 price history</text>
 
     <rect x="732" y="160" width="210" height="78" rx="6" class="box"/>
     <text x="744" y="184" class="bt">Gold</text>
-    <text x="744" y="204" class="bs">price index, Eilat vs center</text>
-    <text x="744" y="222" class="bs">fake promos, shrinkflation</text>
+    <text x="744" y="204" class="bs">2 facts built (G0)</text>
+    <text x="744" y="222" class="bs">dims, marts: next</text>
 
     <rect x="962" y="290" width="120" height="78" rx="6" class="box"/>
     <text x="974" y="314" class="bt">Ops</text>
     <text x="974" y="334" class="bs">run log</text>
-    <text x="974" y="352" class="bs">DQ, quarantine</text>
+    <text x="974" y="352" class="bs">backfill queue</text>
 
     <!-- Power BI & X -->
     <rect x="1126" y="160" width="146" height="78" rx="6" class="box"/>
     <text x="1138" y="184" class="bt">Power BI</text>
-    <text x="1138" y="204" class="bs">star schema</text>
-    <text x="1138" y="222" class="bs">5 report pages</text>
+    <text x="1138" y="204" class="bs">marts + dims</text>
+    <text x="1138" y="222" class="bs">Import mode</text>
 
     <rect x="1126" y="420" width="146" height="62" rx="6" class="box"/>
     <text x="1138" y="444" class="bt">X posts</text>
@@ -322,9 +336,9 @@ a:focus-visible { outline: 2px solid var(--daily); outline-offset: 2px; }
     <text x="500" y="82" class="el el-h">past versions</text>
 
     <path d="M180 150 H222 V316 H298" class="e e-d" marker-end="url(#ad)"/>
-    <text x="228" y="262" class="el el-d">fallback</text>
-    <text x="228" y="276" class="el el-d">if a site</text>
-    <text x="228" y="290" class="el el-d">fails</text>
+    <text x="228" y="262" class="el el-d">manual</text>
+    <text x="228" y="276" class="el el-d">fallback,</text>
+    <text x="228" y="290" class="el el-d">not built</text>
 
     <path d="M180 346 H298" class="e e-d" marker-end="url(#ad)"/>
     <text x="238" y="340" class="el el-d">all chains</text>
@@ -362,7 +376,7 @@ a:focus-visible { outline: 2px solid var(--daily); outline-offset: 2px; }
     <text x="1207" y="330" class="el">charts</text>
   </svg>
   </div>
-  <figcaption>Both lanes write to a raw S3 archive in the same folder layout (the scraper's in Tel Aviv, because the chain sites need an Israeli IP; the Kaggle lane's in Ohio, next to Databricks), so everything after S3 doesn't care where a file came from. Bronze is a managed Delta table in Databricks storage (Ohio, next to the compute) since 2026-11-12: reading an external bronze table in the Tel Aviv bucket crossed the ocean on every read, and that networking cost was about five times the real compute of the first Kaggle slice. Raw stays in S3, so bronze can be rebuilt. A promotion that lists more than 10,000 products in one file (a basket-level coupon, donation or delivery fee that carries the whole catalog; real product deals reach about 5,200 to 9,100, store-wide offers start at about 11,500) is stored as one row, not one per product, and lands in silver's store_wide_promotions table. The Kaggle backfill runs as a queue (<span class="mono">ops.backfill_queue</span>): job <span class="mono">kaggle_backfill</span> takes the next few versions every 30 minutes until none are left. so everything after S3 doesn't care where a file came from. The medallion is drawn bottom-up: raw files at the bottom, report tables at the top. Not drawn: when the Map ends, Step Functions writes a small marker file to <span class="mono">source=scraper/_markers/</span> (WriteMarker), and a file arrival trigger on that folder starts the Databricks job <span class="mono">daily_load</span> (bronze, then silver); AWS holds no Databricks token, because EventBridge Connections are disabled in Tel Aviv. An EventBridge rule and SNS send an email on any failed Step Functions run, and Power BI Desktop runs on the laptop only as the authoring tool; nothing scheduled runs there.</figcaption>
+  <figcaption>Both lanes write raw files in the same folder layout: the scraper's bucket is in Tel Aviv, because the chain sites need an Israeli IP; the Kaggle bucket is in Ohio, next to Databricks. So everything after S3 doesn't care where a file came from. Bronze is a managed Delta table in Databricks storage (Ohio, next to the compute) since 2026-11-12: reading an external bronze table in the Tel Aviv bucket crossed the ocean on every read, and that networking cost about five times the real compute of the first Kaggle slice. Raw stays in S3, so bronze can be rebuilt. A promotion that lists more than 10,000 products in one file (a coupon, donation or delivery fee that carries the whole catalog; real product deals reach about 9,100, store-wide offers start at about 11,500) is stored as one row and lands in silver's <span class="mono">store_wide_promotions</span>, which gold doesn't use. The Kaggle backfill ran as a queue (<span class="mono">ops.backfill_queue</span>, job <span class="mono">kaggle_backfill</span> every 30 minutes) and finished on 2026-11-15 (157 versions loaded, 5 skipped); its schedule is paused. Not drawn: when the daily Map ends, Step Functions writes a small marker file to <span class="mono">source=scraper/_markers/</span>, and a file arrival trigger on that folder starts the Databricks job <span class="mono">daily_load</span> (bronze, then silver, then gold; gold runs only if silver succeeded). AWS holds no Databricks token, because EventBridge Connections are disabled in Tel Aviv. An EventBridge rule and SNS send an email on any failed Step Functions run. Power BI Desktop runs on the laptop only as the authoring tool; nothing scheduled runs there. The medallion is drawn bottom-up: raw files at the bottom, report tables at the top.</figcaption>
 </figure>
 
 <section id="where">
@@ -443,7 +457,7 @@ a:focus-visible { outline: 2px solid var(--daily); outline-offset: 2px; }
   </figure>
 </section>
 
-<section>
+<section id="lanes">
   <div class="col">
     <h2>Two ways data comes in</h2>
     <p>History prep fills the past once. The daily run keeps it current. They share everything from S3 on, so the pipeline in Databricks is written once.</p>
@@ -454,18 +468,18 @@ a:focus-visible { outline: 2px solid var(--daily); outline-offset: 2px; }
       <tr><th></th><th class="hh">History prep</th><th class="hd">Daily run</th></tr>
     </thead>
     <tbody>
-      <tr><th>When</th><td>Once, started by hand, one slice (a few Kaggle versions) at a time. Re-runnable.</td><td>Sunday to Friday at 09:00 Israel time (no Saturday run).</td></tr>
-      <tr><th>Source</th><td>Past Kaggle versions, one per day. A version is a full snapshot and holds about two days of files; its date is the upload date, so each row's date comes from its file name. <span class="mono">index.json</span> maps version number to date.</td><td>Chain sites for every chain (raw XML), including the 7 that block foreign traffic. Today's Kaggle file only if a chain's site fails.</td></tr>
-      <tr><th>Scope</th><td>One version a week from 2024-10-22 (price and store files), every version in the windows around Hanukkah 2024 and 2025 (also promotion files), all stores of the 10 chains, full files only. About 156 versions.</td><td>10 major chains, all branches. Price, promo and store files. Silver keeps every store.</td></tr>
-      <tr><th>Unit of work</th><td>One Lambda call per Kaggle file (version × chain × file kind), 5 at a time by the Map state; a failed file retries alone.</td><td>One Lambda run per chain + file type, 30 inputs to one function; a broken chain site fails and retries alone.</td></tr>
-      <tr><th>Lands as</th><td><span class="mono">source=kaggle/date=&lt;version date&gt;/chain=…/&lt;name&gt;.csv.gz</span>, plus a manifest per file in <span class="mono">source=kaggle/_manifest/</span></td><td><span class="mono">source=scraper/…</span> or <span class="mono">source=kaggle/…</span></td></tr>
+      <tr><th>When</th><td>Once. Downloads started by hand per slice; loading ran as a queue (job <span class="mono">kaggle_backfill</span>, 5 versions every 30 minutes). Finished 2026-11-15, schedule paused. Re-runnable.</td><td>Sunday to Friday at 09:00 Israel time (no Saturday run).</td></tr>
+      <tr><th>Source</th><td>Past Kaggle versions, one per day. A version is a full snapshot and holds about two days of files; its date is the upload date, so each row's date comes from its file name. <span class="mono">index.json</span> maps version number to date.</td><td>Chain sites for every chain (raw XML), including the 7 that block foreign traffic. Using today's Kaggle file when a site fails is a manual option, not automated.</td></tr>
+      <tr><th>Scope</th><td>One version a week from 2024-10-22 (price and store files), every version in the windows around Hanukkah 2024 and 2025 (also promotion files), all stores of the 10 chains, full files only. 162 versions downloaded (52.6 GB), 157 loaded, 5 skipped as duplicates of fuller versions.</td><td>10 major chains, all branches. Price, promo and store files. Silver keeps every store.</td></tr>
+      <tr><th>Unit of work</th><td>One Lambda call per Kaggle file (version × chain × file kind), 10 at a time by a Distributed Map in Ohio; a failed file retries alone.</td><td>One Lambda run per chain + file type, 30 inputs to one function; a broken chain site fails and retries alone.</td></tr>
+      <tr><th>Lands as</th><td>Ohio bucket: <span class="mono">source=kaggle/date=&lt;version date&gt;/chain=…/&lt;name&gt;.csv.gz</span>, plus a manifest per file in <span class="mono">source=kaggle/_manifest/</span></td><td>Tel Aviv bucket: <span class="mono">source=scraper/date=…/chain=…/</span></td></tr>
       <tr><th>Safe to re-run</th><td>Yes. A file with a manifest (sizes, md5, status) is skipped; bronze skips files it already loaded. The S3 key is fixed per date, chain and file anyway.</td><td>Yes, for the same reason. Auto Loader only picks up files it hasn't seen.</td></tr>
     </tbody>
   </table>
   </div>
 </section>
 
-<section class="col" style="max-width:none">
+<section id="history" class="col" style="max-width:none">
   <div class="col">
     <h2>How a daily full file becomes price history</h2>
     <p>Every day each chain republishes its whole price list. Silver keeps a new row only when a tracked value changes (price, unit price, package size, flags), with the first and last day it was seen. A store's file that arrives without the product also ends a period; a day with no file doesn't. That's an SCD Type 2 table, and the same "source sends a full dump" problem as a nightly bank extract.</p>
@@ -493,10 +507,10 @@ a:focus-visible { outline: 2px solid var(--daily); outline-offset: 2px; }
       </tbody>
     </table>
   </div>
-  <p class="muted" style="margin-top:12px;font-size:14px">Illustrative numbers. The real key is chain + store + barcode. Built 2026-11-10: 20.0M daily rows became 7.6M periods. The "fake promotion" check compares a promo price with the history row in force 14 days before the promo started.</p>
+  <p class="muted" style="margin-top:12px;font-size:14px">Illustrative numbers. The real key is chain + store + barcode. Built 2026-11-10: 20.0M daily rows became 7.6M periods; with the Kaggle history (2026-11-17), 920M daily rows became 110.7M periods. The "fake promotion" check compares a promo price with the history row in force 14 days before the promo started.</p>
 </section>
 
-<section>
+<section id="stack">
   <div class="col">
     <h2>Why this stack</h2>
     <p>Each choice had to fit three limits: everything scheduled runs in the cloud, it costs a few dollars a month at most, and it shows the tools Israeli job ads ask for.</p>
@@ -534,8 +548,8 @@ a:focus-visible { outline: 2px solid var(--daily); outline-offset: 2px; }
     </div>
     <div class="row">
       <div class="layer">Transformation</div>
-      <div><div class="pick">Lakeflow declarative pipeline</div><div class="instead">Instead of <b>dbt</b>, <b>notebooks with hand-written MERGE</b></div></div>
-      <div class="reason"><p>Quality rules (expectations) and SCD2 history (AUTO CDC) are built in. Free Edition allows one active pipeline per type, so one pipeline covers all chains. dbt can come later as an extra.</p></div>
+      <div><div class="pick">Notebooks with SQL and MERGE, run as Databricks jobs</div><div class="instead">Instead of <b>a Lakeflow declarative pipeline</b> (the plan on 2026-11-03), <b>dbt</b></div></div>
+      <div class="reason"><p>Each rule is written out and kept in Git: SCD2 that treats a missing file differently from a missing product, quarantine with a reason per row, row-count reconciliation, data-quality checks with PASS / WARNING / FAIL. Jobs chain the layers (<span class="mono">daily_load</span> runs bronze, silver, gold), and each MERGE skips rows already saved, so a re-run adds nothing. dbt can come later as an extra.</p></div>
     </div>
     <div class="row">
       <div class="layer">Reporting</div>
@@ -545,12 +559,12 @@ a:focus-visible { outline: 2px solid var(--daily); outline-offset: 2px; }
     <div class="row">
       <div class="layer">Setup as code</div>
       <div><div class="pick">Terraform + Databricks bundles</div><div class="instead">Instead of <b>clicking in the consoles</b></div></div>
-      <div class="reason"><p>Terraform creates the AWS resources, and a bundle defines the Databricks pipeline and jobs, so the repo can rebuild everything. It's also a common interview topic.</p></div>
+      <div class="reason"><p>Terraform creates the AWS resources, and a bundle defines the Databricks jobs and notebooks, so the repo can rebuild everything. It's also a common interview topic.</p></div>
     </div>
   </div>
 </section>
 
-<section>
+<section id="cost">
   <div class="col"><h2>Cost per month (estimate)</h2></div>
   <div class="costs">
     <div class="cost"><div class="n">≈ $1–5</div><div class="l">Lambda, Step Functions, S3</div></div>
@@ -558,44 +572,44 @@ a:focus-visible { outline: 2px solid var(--daily); outline-offset: 2px; }
     <div class="cost"><div class="n">$0</div><div class="l">Power BI Desktop</div></div>
     <div class="cost"><div class="n">$0</div><div class="l">Kaggle downloads</div></div>
   </div>
-  <p class="muted" style="margin-top:12px;font-size:14px">Databricks runs in Ohio and the S3 bucket is in Tel Aviv, so its reads should be billed as inter-region transfer, $0.08 per GB (AWS price list, 2026-11-04). About 1 GB a day is roughly $2.40 a month.</p>
+  <p class="muted" style="margin-top:12px;font-size:14px">Databricks runs in Ohio and the scraper bucket is in Tel Aviv, so the daily read is billed as inter-region transfer, $0.08 per GB (AWS price list, 2026-11-04). About 0.5 GB a day is roughly $1.20 a month; moving the bucket was measured to save only about $6 a year. Everything Databricks reads repeatedly (bronze, the Kaggle files) is in Ohio.</p>
 </section>
 
-<section>
+<section id="tests">
   <div class="col">
     <h2>Day-1 tests</h2>
-    <p>Each of these could change one box in the diagram, so they come before any building.</p>
+    <p>Each of these could have changed a box in the diagram, so they came before any building.</p>
   </div>
   <div class="prove">
-    <div class="card"><span class="tag tag-pass">Passed 11-03</span><h3>Do blocked chains accept AWS?</h3><p>Yes. A Lambda in Tel Aviv downloaded a store file from all 7 blocked chains, plus Shufersal and Rami Levy. Still to watch: whether that holds day after day.</p></div>
-    <div class="card"><span class="tag">Untested</span><h3>Power BI to Free Edition</h3><p>Connect Power BI Desktop to the free SQL warehouse. If it can't, the gold tables are exported as Parquet files and Power BI reads those.</p></div>
-    <div class="card"><span class="tag">Untested</span><h3>The daily compute quota</h3><p>Silver keeps every store, and its first load of 20 million rows took about a minute. Watch the quota once all layers run daily. If it's too close, cut stores before cutting chains.</p></div>
+    <div class="card"><span class="tag tag-pass">Passed 11-03</span><h3>Do blocked chains accept AWS?</h3><p>Yes. A Lambda in Tel Aviv downloaded a store file from all 7 blocked chains, plus Shufersal and Rami Levy. The daily run has collected all 10 chains since 2026-11-09.</p></div>
+    <div class="card"><span class="tag tag-pass">Passed 11-03</span><h3>Power BI to Free Edition</h3><p>Power BI Desktop read a test table from the free SQL warehouse in Import mode (1,000 rows, Hebrew OK). Seen then and fixed in silver: barcodes typed as numbers, empty strings instead of NULL.</p></div>
+    <div class="card"><span class="tag">Watch</span><h3>The daily compute quota</h3><p>Free Edition doesn't show the quota. A full <span class="mono">daily_load</span> took about 15 minutes and the gold facts about 3 more. Watch for quota stops as marts are added; if it gets close, cut stores before cutting chains.</p></div>
   </div>
 </section>
 
 <section class="gold" id="gold" aria-label="Gold layer design">
 <header class="col" style="display:grid;gap:10px">
-  <div class="eyebrow">Supermarket Detective · milestone 4 · draft for decision · 2026-11-15</div>
+  <div class="eyebrow">Supermarket Detective · milestone 4 · decided 2026-11-17 · G0 built</div>
   <h2 style="margin:0">Gold layer design</h2>
-  <p class="lede">How the tables connect from the chains' files to Power BI, what the gold tables look like, and which questions they answer. The decisions at the bottom are open for Itai.</p>
+  <p class="lede">How the tables connect from the chains' files to Power BI, what the gold tables look like, and which questions they answer. Itai decided D1–D7 on 2026-11-17; the two facts are built.</p>
   <div class="facts">
-    <span><b>10</b> chains</span><span><b>945</b> physical stores</span><span><b>13</b> in Eilat (4 chains)</span>
-    <span><b>202</b> Kaggle dates, 2024-10-21 → 2026-11-10</span><span>scraper daily since <b>2026-11-09</b></span>
-    <span><b>857M</b> rows in <code>price_obs</code></span><span><b>108M</b> periods in <code>price_history</code></span>
+    <span><b>10</b> chains</span><span><b>946</b> physical stores (975 listed)</span><span><b>13</b> in Eilat (4 chains)</span>
+    <span><b>211</b> Kaggle dates, 2024-10-21 → 2026-11-10</span><span>scraper daily since <b>2026-11-09</b></span>
+    <span><b>920M</b> rows in <code>price_obs</code></span><span><b>110.7M</b> periods in <code>price_history</code></span>
   </div>
 </header>
 
-<section>
+<section id="g-lineage">
   <div class="eyebrow">1 · Lineage</div>
   <h2>From the chains' websites to a chart</h2>
-  <p>Raw files are kept untouched in S3. Bronze holds every value as published, silver cleans and keys it, and gold shapes it for questions. The big tables stay in Databricks, and Power BI imports only the small gold marts.</p>
+  <p>Raw files are kept untouched in S3. Bronze holds every value as published, silver cleans and keys it, and gold shapes it for questions. The big tables stay in Databricks, and Power BI imports only the small gold marts and the dimensions they use.</p>
   <div class="legend">
-    <span style="--c:var(--raw)">source / raw files</span><span style="--c:var(--bronze)">bronze</span><span style="--c:var(--silver)">silver</span><span style="--c:var(--gold)">gold (proposed)</span><span style="--c:var(--use)">consumers</span>
+    <span style="--c:var(--raw)">source / raw files</span><span style="--c:var(--bronze)">bronze</span><span style="--c:var(--silver)">silver</span><span style="--c:var(--gold)">gold (dashed = not built yet)</span><span style="--c:var(--use)">consumers</span>
   </div>
   <div class="diagram"><svg id="lineage" viewBox="0 0 1100 600" role="img" aria-label="Lineage from chain websites and Kaggle through bronze, silver and gold tables to Power BI"></svg></div>
 </section>
 
-<section>
+<section id="g-tables">
   <div class="eyebrow">2 · Gold tables</div>
   <h2>A small star, plus one mart per question</h2>
   <p>The star (3 dimensions, 2 facts) is the only thing that reads silver. Every mart reads only the star, so keys, filters (physical store, shared barcode) and business rules live in one place, and two charts can't disagree because they took a shortcut to silver. A fact is stored as a table only when building it does real work (changes the grain, or is too expensive to repeat); otherwise it's a view over silver. Marts are always tables, rebuilt daily. The one exception is <code>ops_health</code>, which reads pipeline metadata, not prices.</p>
@@ -603,7 +617,7 @@ a:focus-visible { outline: 2px solid var(--daily); outline-offset: 2px; }
   <div class="grid" id="tables"></div>
 </section>
 
-<section>
+<section id="g-finding">
   <div class="eyebrow">3 · First finding</div>
   <div class="finding">
     <div class="big">0.847</div>
@@ -612,7 +626,7 @@ a:focus-visible { outline: 2px solid var(--daily); outline-offset: 2px; }
   </div>
 </section>
 
-<section>
+<section id="g-questions">
   <div class="eyebrow">4 · Questions</div>
   <h2>What this data can tell Israelis</h2>
   <p>Sorted by how strong the story is and how ready the data is. "Ready" means silver already has what's needed.</p>
@@ -622,24 +636,25 @@ a:focus-visible { outline: 2px solid var(--daily); outline-offset: 2px; }
   </table></div>
 </section>
 
-<section>
+<section id="g-decisions">
   <div class="eyebrow">5 · Decisions</div>
-  <h2>Open for Itai</h2>
+  <h2>Decided by Itai, 2026-11-17</h2>
   <div class="decisions" id="decisions"></div>
 </section>
 
-<section>
+<section id="g-build">
   <div class="eyebrow">6 · Build order</div>
-  <h2>Proposed sequence</h2>
+  <h2>Sequence</h2>
   <ol class="steps">
     <li><b>G0 ✓</b> facts in <code>gold_facts.py</code>, job <code>gold_load</code> after silver in <code>daily_load</code>: view <code>fact_price_period</code> (keys + renames over silver); table <code>fact_promotion_period</code> (full rebuild for now, then incremental: extend or insert). Product key rule is one SQL function, <code>silver.item_key</code>.</li>
     <li><b>G1</b> dimensions: <code>dim_store</code> (with a city table from the CBS locality codes), <code>dim_product</code>, <code>dim_date</code> with Hanukkah and other holidays.</li>
     <li><b>G2</b> <code>mart_eilat_gap</code>, plus the Carrefour check.</li>
+    <li><b>G2b</b> product categories (D5): rules + <code>ai_classify</code> in silver, filled into <code>dim_product</code>.</li>
     <li><b>G3</b> Power BI v1: one page on the Eilat question, Import mode from the SQL warehouse. Then the first X post.</li>
     <li><b>G4</b> <code>mart_basket_index</code>: cheapest chain by city.</li>
     <li><b>G5</b> <code>mart_fake_promos</code> and <code>mart_price_moves</code>.</li>
     <li><b>G6</b> <code>mart_holiday_index</code>, ready before Hanukkah starts on 2026-12-04.</li>
-    <li><b>G7</b> task <code>gold_load</code> added to <code>daily_load</code> after silver. Marts are rebuilt in full each day (they're small), and dimensions overwrite in place.</li>
+    <li><b>G7</b> incremental loads: <code>fact_promotion_period</code> becomes extend-or-insert; marts stay full rebuilds. (<code>gold_load</code> in <code>daily_load</code> was done in G0.)</li>
   </ol>
 </section>
 </section>
@@ -657,11 +672,11 @@ const svg = document.getElementById("lineage");
 const W = 158, H = 34;
 const B = {
   // id: [x, y, layer, label, sub]
-  sites:   [10, 120, "raw", "chain websites", "10 chains, legal price files"],
+  sites:   [10, 120, "raw", "chain websites", "10 chains, legal files"],
   kaggle:  [10, 400, "raw", "Kaggle archive", "daily since 2024-09"],
-  s3ta:    [190, 120, "raw", "S3 Tel Aviv", "source=scraper/ · daily 09:00"],
-  s3oh:    [190, 400, "raw", "S3 Ohio", "source=kaggle/ · 162 versions"],
-  b_price: [370, 150, "bronze", "price_items", "one row per product per file"],
+  s3ta:    [190, 120, "raw", "S3 Tel Aviv", "source=scraper/ · daily"],
+  s3oh:    [190, 400, "raw", "S3 Ohio", "Kaggle · 162 versions"],
+  b_price: [370, 150, "bronze", "price_items", "1 row per product, file"],
   b_promo: [370, 300, "bronze", "promotion_items", "promotion × product"],
   b_store: [370, 40,  "bronze", "stores", "one row per store per file"],
   s_store: [560, 20,  "silver", "stores", "chain + store_id · is_eilat"],
@@ -670,12 +685,12 @@ const B = {
   s_hist:  [560, 200, "silver", "price_history", "SCD2 price periods"],
   s_pobs:  [560, 280, "silver", "promotion_obs", "deal × product × day"],
   s_swp:   [560, 340, "silver", "store_wide_promotions", "coupons, basket deals"],
-  s_q:     [560, 420, "silver", "quarantine + dq_results", "rejects, 20 checks"],
+  s_q:     [560, 420, "silver", "quarantine + DQ", "rejects, 22 checks"],
   g_store: [760, 20,  "gold", "dim_store", "+ city, region"],
   g_prod:  [760, 60,  "gold", "dim_product", "+ category"],
   g_date:  [760, 100, "gold", "dim_date", "+ holidays"],
-  g_fact:  [760, 150, "gold", "fact_price_period", "view · store × product × period"],
-  g_pfact: [760, 190, "gold", "fact_promotion_period", "table · deal × store × product"],
+  g_fact:  [760, 150, "gold", "fact_price_period", "view · price periods"],
+  g_pfact: [760, 190, "gold", "fact_promotion_period", "table · 1 row per deal"],
   m_eilat: [760, 290, "gold", "mart_eilat_gap", "chain × date"],
   m_bask:  [760, 335, "gold", "mart_basket_index", "chain × city × date"],
   m_fake:  [760, 380, "gold", "mart_fake_promos", "deal × store × product"],
@@ -701,11 +716,12 @@ const E = [
   ["m_eilat","x"],["m_fake","x"],["m_hol","x"],
   ["g_fact","genie"],["g_prod","genie"],["g_store","genie"],
 ];
+const BUILT = new Set(["g_fact", "g_pfact"]);
 const color = l => `var(--${l})`;
 const tint = l => `var(--tint-${l})`;
 function el(tag, attrs, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); (parent || svg).appendChild(e); return e; }
 // column headers
-[[10,"SOURCE"],[190,"RAW (S3)"],[370,"BRONZE"],[560,"SILVER"],[760,"GOLD · proposed"],[950,"USE"]].forEach(([x,t]) => {
+[[10,"SOURCE"],[190,"RAW (S3)"],[370,"BRONZE"],[560,"SILVER"],[760,"GOLD"],[950,"USE"]].forEach(([x,t]) => {
   const tx = el("text", {x, y: 12, "font-size": 10, fill: "var(--muted)", "letter-spacing": 1}); tx.textContent = t; });
 // dims/fact vs marts brackets
 el("text", {x: 760, y: 280, "font-size": 9, fill: "var(--muted)"}).textContent = "marts read only the star above ↑";
@@ -725,26 +741,26 @@ el("path", {d: "M0,0 L8,4 L0,8 z", fill: "var(--muted)"}, mk);
 for (const id in B) {
   const [x, y, layer, label, sub] = B[id];
   const g = el("g", {});
-  el("rect", {x, y, width: W, height: H, rx: 5, fill: tint(layer), stroke: color(layer), "stroke-width": layer === "gold" ? 1.6 : 1, "stroke-dasharray": layer === "gold" ? "4 2" : "none"}, g);
+  el("rect", {x, y, width: W, height: H, rx: 5, fill: tint(layer), stroke: color(layer), "stroke-width": layer === "gold" ? 1.6 : 1, "stroke-dasharray": layer === "gold" && !BUILT.has(id) ? "4 2" : "none"}, g);
   const t1 = el("text", {x: x + 8, y: y + 14, "font-size": 11.5, "font-weight": 500, fill: "var(--fg)"}, g); t1.textContent = label;
   const t2 = el("text", {x: x + 8, y: y + 27, "font-size": 9, fill: "var(--muted)"}, g); t2.textContent = sub;
 }
 
 // ---------- gold tables ----------
 const T = [
-  {k:"dim", name:"gold.dim_store", where:"pbi", grain:"one row per <b>chain + store</b>", size:"~974 rows",
+  {k:"dim", name:"gold.dim_store", where:"pbi", grain:"one row per <b>chain + store</b>", size:"~975 rows",
    cols:"store_key, chain, chain_name_he, sub_chain, store_id, store_name, city_code, <code>city_name</code>, <code>district</code>, is_physical, is_eilat, store_type",
-   from:"silver.stores + a CBS locality-code table (city names: 8 of 10 chains publish only a numeric code)"},
-  {k:"dim", name:"gold.dim_product", where:"pbi", grain:"one row per <b>item_key</b> (shared barcode, or chain:code)", size:"~300k rows (Power BI gets only the products used in marts)",
+   from:"silver.stores + a CBS locality-code table (D6). City field by chain: 6 chains publish a numeric code, Victory and Mahsani Ashuk a Hebrew name, Yohananof and most Keshet stores 0"},
+  {k:"dim", name:"gold.dim_product", where:"pbi", grain:"one row per <b>item_key</b> (shared barcode, or chain:code)", size:"~325k rows (Power BI gets only the products used in marts)",
    cols:"product_key, item_key, scope, name, manufacturer, country, quantity, unit, is_weighted, chains_count, <code>category</code>, <code>is_private_label</code>",
    from:"silver.items + category enrichment (see D5)"},
   {k:"dim", name:"gold.dim_date", where:"pbi", grain:"one row per <b>day</b>, 2024-09-01 → 2027-12-31", size:"~1,200 rows",
    cols:"date, weekday, week_start, month, hebrew_date, holiday_name, days_to_holiday, is_hanukkah, data_coverage (daily / weekly / none)",
    from:"generated + a fixed list of Hebrew holidays"},
-  {k:"fact", name:"gold.fact_price_period", where:"dbx", grain:"one row per <b>store × product × price period</b>", mat:"view", size:"~108M rows, no copy · stays in Databricks",
-   cols:"store_key, product_key, price, unit_price, quantity, valid_from, valid_to, days_observed, is_current, source",
-   from:"silver.price_history, renamed columns + gold keys (the S5 shared-barcode-or-chain:code rule lives here once). Silver already has this grain, so a copy would only duplicate 108M rows a day. Becomes a table with liquid clustering on date + store only if query speed demands it."},
-  {k:"fact", name:"gold.fact_promotion_period", where:"dbx", grain:"one row per <b>store × promotion × group × product</b>", mat:"table", size:"~23.5M rows from ~180M daily rows · stays in Databricks",
+  {k:"fact", name:"gold.fact_price_period", where:"dbx", grain:"one row per <b>store × product × price period</b>", mat:"view", built:true, size:"~110.7M rows, no copy · stays in Databricks",
+   cols:"store_key, product_key, price, unit_price, quantity, unit_of_measure, is_weighted, valid_from, valid_to, days_observed, is_current",
+   from:"silver.price_history, renamed columns + gold keys (the S5 shared-barcode-or-chain:code rule lives here once). Silver already has this grain, so a copy would only duplicate 110.7M rows a day. Becomes a table with liquid clustering on date + store only if query speed demands it."},
+  {k:"fact", name:"gold.fact_promotion_period", where:"dbx", grain:"one row per <b>store × promotion × group × product</b>", mat:"table", built:true, size:"23.5M rows from 180M daily rows · stays in Databricks",
    cols:"store_key, product_key, promotion_id, group_id, description, reward_type, min_qty, max_qty, deal_price, deal_unit_price, discount_rate, discount_type, club_code, is_coupon, is_gift_item, allow_multiple_discounts, min_purchase_amount, start_at, end_at, first_seen, last_seen, days_observed, values_changed, source",
    from:"silver.promotion_obs collapsed to one row per deal. A table because it changes the grain. Never split by values (chains re-encode the same deal daily); values from the last day seen, values_changed flags differences. Check: sum(days_observed) = rows in promotion_obs. Full rebuild for now; later incremental: extend or insert."},
   {k:"mart", name:"gold.mart_eilat_gap", where:"pbi", grain:"one row per <b>chain × date</b> (+ a product-level table for the latest date)", size:"~1k rows + ~55k rows",
@@ -770,7 +786,7 @@ const wrap = document.getElementById("tables");
 for (const t of T) {
   const c = document.createElement("div"); c.className = "card " + t.k;
   c.innerHTML = `<h3>${t.name}</h3>
-    <div class="gmeta"><span class="pill ${t.where}">${t.where === "pbi" ? "→ Power BI" : "Databricks only"}</span>${t.mat ? `<span class="pill">${t.mat}</span>` : ""}<span class="pill">${t.size}</span></div>
+    <div class="gmeta"><span class="pill ${t.where}">${t.where === "pbi" ? "→ Power BI" : "Databricks only"}</span>${t.built ? `<span class="pill pbi">built 2026-11-17</span>` : ""}${t.mat ? `<span class="pill">${t.mat}</span>` : ""}<span class="pill">${t.size}</span></div>
     <div class="grain">${t.grain}</div>
     <div class="cols">${t.cols}</div>
     <div class="from">From: ${t.from}</div>${t.ex ? `<div class="example">example row: ${t.ex}</div>` : ""}`;
@@ -784,7 +800,7 @@ const Q = [
   ["Same chain, same product, different branch: how much does the price change?", "Your local Shufersal may cost more than the one in the next town", "mart_basket_index", "ok", "ready"],
   ["Fake sales: deals that aren't cheaper than the price two weeks before", "Consumer-protection angle, very shareable", "mart_fake_promos", "warn", "daily data only in holiday windows + since 11-09"],
   ["Who raised prices the most since October 2024 (chain, manufacturer)?", "The cost of living is the top consumer topic", "mart_price_moves", "ok", "ready (weekly granularity)"],
-  ["Do Hanukkah products get pricier before the holiday? 2024 vs 2025 vs 2026", "A seasonal post with a live update this year", "mart_holiday_index", "warn", "needs the backfill to finish"],
+  ["Do Hanukkah products get pricier before the holiday? 2024 vs 2025 vs 2026", "A seasonal post with a live update this year", "mart_holiday_index", "ok", "ready · backfill done 11-15"],
   ["Shrinkflation: smaller package, same price", "Classic story; hard to prove, very viral", "new mart", "no", "needs product matching across barcodes"],
   ["Price-controlled products (milk, bread, eggs): is the legal maximum kept?", "A legal-compliance check anyone can verify", "new mart", "no", "needs the official price list"],
   ["Online store vs the physical branch: is online pricier?", "Many people order online without comparing", "mart_basket_index", "warn", "store_type rules per chain"],
@@ -801,18 +817,24 @@ Q.forEach(([q, why, tbl, st, note], i) => {
 
 // ---------- decisions ----------
 const D = [
-  ["Which comparison for Eilat?", "<b>Same chain, Eilat vs outside.</b> Comparing all of Eilat to the whole country would mostly measure which chains are in Eilat."],
-  ["What counts as the same product across chains?", "<b>Shared barcodes only</b> for comparisons across chains. Chain-only codes are still fine inside one chain."],
-  ["Shelf price or deal price?", "<b>Shelf price first</b>, deals in their own marts. Mixing them muddies a clean VAT or basket story."],
-  ["What goes to Power BI?", "<b>Only the marts and the dimensions they use</b>, in Import mode. The 108M-row fact stays in Databricks for SQL and Genie. In production you might use DirectQuery or a semantic layer; on Free Edition, Import is simpler and fast."],
-  ["Product categories: the data has none. How to add them?", "<b>Keyword rules for the basket products (a few hundred), then an LLM pass over the rest, checked against a hand-labelled sample of 300.</b> That gives an AI-enrichment story with a measured accuracy."],
-  ["City names: 8 chains publish only a code.", "<b>Load the CBS locality-code table</b> (a public CSV) as a small reference table. Codes become names and districts in <code>dim_store</code>."],
-  ["Gold refresh: when and how?", "<b>A <code>gold_load</code> task after silver in <code>daily_load</code></b>, with marts rebuilt in full each day. They're small, so a full rebuild is simpler and safe. Making them incremental is a later lesson."],
+  ["Which comparison for Eilat?", "Accepted", "<b>Same chain, Eilat vs outside.</b> Comparing all of Eilat to the whole country would mostly measure which chains are in Eilat."],
+  ["What counts as the same product across chains?", "Accepted", "<b>Shared barcodes only</b> for comparisons across chains. Chain-only codes are still fine inside one chain."],
+  ["Shelf price or deal price?", "Accepted", "<b>Shelf price first</b>, deals in their own marts. Mixing them muddies a clean VAT or basket story."],
+  ["What goes to Power BI?", "Accepted", "<b>Only the marts and the dimensions they use</b>, in Import mode. The 110.7M-row fact stays in Databricks for SQL and Genie. In production you might use DirectQuery or a semantic layer; on Free Edition, Import is simpler and fast."],
+  ["Product categories: the data has none. How to add them?", "Accepted, in scope", "<b>Built after G2, in silver.</b> Categories follow the CBS consumer price index groups. Keyword rules first, then Databricks' <code>ai_classify</code> (tested on Free Edition, in Hebrew) for the rest, in a task that classifies only new products; manual overrides win. Accuracy is measured on 300 products labelled by Claude, 30 of them spot-checked by Itai."],
+  ["City names: most chains publish a code, not a name.", "Accepted", "<b>Load the CBS locality-code table</b> (a public CSV) as a small reference table. Codes become names and districts in <code>dim_store</code>."],
+  ["Gold refresh: when and how?", "Accepted, built in G0", "<b>Job <code>gold_load</code> after silver in <code>daily_load</code></b>; it runs only if silver succeeded. Marts are rebuilt in full each day (they're small); <code>fact_promotion_period</code> becomes incremental (extend or insert) later."],
 ];
 const db = document.getElementById("decisions");
-for (const [q, rec] of D) {
+for (const [q, st, rec] of D) {
   const d = document.createElement("div"); d.className = "decision";
-  d.innerHTML = `<div class="q">${q}</div><div class="rec">Recommendation: ${rec}</div>`;
+  d.innerHTML = `<div class="q">${q} <span class="pill pbi">${st}</span></div><div class="rec">Decision: ${rec}</div>`;
   db.appendChild(d);
 }
+
+// ---------- section buttons: scroll in-page (works even where #links don't navigate) ----------
+document.querySelectorAll('a[href^="#"]').forEach(a => a.addEventListener("click", e => {
+  const t = document.getElementById(a.getAttribute("href").slice(1));
+  if (t) { e.preventDefault(); t.scrollIntoView({behavior: "smooth", block: "start"}); }
+}));
 </script>
