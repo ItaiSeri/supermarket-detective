@@ -462,7 +462,7 @@ Managed Delta table, written by `databricks/notebooks/silver_dq.py` (job `silver
 
 ## Gold: the star (milestone 4)
 
-Design, lineage and the questions it answers: `docs/gold-design.html` (claude.ai/artifact/BZTUSsGgZt5Naig6aC3qGt). Built by `databricks/notebooks/gold_facts.py`, job `gold_load` (tasks `build_facts`, `log_run`), which `daily_load` starts after `silver_load` succeeds, so a DQ FAIL in silver stops gold. Rule: a fact is a stored table only when building it changes the grain; otherwise it is a view over silver. Marts read only the star.
+Design, lineage and the questions it answers: the "Gold layer design" section of `docs/architecture.html` (claude.ai/artifact/6fuqxaVS7aWoaqWakoTAUV). Built by `databricks/notebooks/gold_facts.py`, job `gold_load` (tasks `build_facts`, `log_run`), which `daily_load` starts after `silver_load` succeeds, so a DQ FAIL in silver stops gold. Rule: a fact is a stored table only when building it changes the grain; otherwise it is a view over silver. Marts read only the star.
 
 **Product key rule:** SQL functions `workspace.silver.item_scope(item_code, item_type)` and `workspace.silver.item_key(chain, item_code, item_type)`, created by `silver_functions.py` (with a self-test). `silver_items` and gold both call them, so the S5 rule lives once: the code itself when shared (ItemType 1, or 8/12/13 digits), else `CHAIN:code`. `store_key` = `CHAIN:store_id`.
 

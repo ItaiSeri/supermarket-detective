@@ -1,5 +1,5 @@
 # Databricks notebook source
-# Gold facts (milestone 4, step G0). The star's facts; marts read only the star (docs/gold-design.html).
+# Gold facts (milestone 4, step G0). The star's facts; marts read only the star (docs/architecture.html, gold layer section).
 # Rule: a fact is a stored table only when building it does real work (changes the grain);
 # otherwise it is a view over silver (no second copy).
 #   fact_price_period     VIEW   silver.price_history already has the grain; keys + renames only
