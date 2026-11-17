@@ -84,3 +84,33 @@ INSERT INTO workspace.silver.chain_id_aliases VALUES (
   'YAYNO_BITAN_AND_CARREFOUR', '7290725900003', DATE'2024-01-01', DATE'2025-07-13',
   'Legacy Yayno Bitan chain ID in Kaggle files before the Carrefour feed; 19 shared store numbers have identical address+ZIP, 9 others unused by the new ID; checked 2026-11-16')
 """)
+
+# COMMAND ----------
+
+# Product key rule (S5), defined once and used by silver_items (scope) and gold (fact keys).
+# A code is 'shared' (the same product in every chain) when ItemType is 1 or it has the shape of a barcode
+# (8, 12 or 13 digits). Anything else is the chain's own code, so its key adds the chain: CHAIN:code.
+spark.sql("""
+CREATE OR REPLACE FUNCTION workspace.silver.item_scope(item_code STRING, item_type STRING)
+RETURNS STRING
+COMMENT 'shared when ItemType is 1 or the code is 8/12/13 digits, else chain'
+RETURN CASE WHEN item_type = '1' OR item_code RLIKE '^([0-9]{8}|[0-9]{12,13})$' THEN 'shared' ELSE 'chain' END
+""")
+spark.sql("""
+CREATE OR REPLACE FUNCTION workspace.silver.item_key(chain STRING, item_code STRING, item_type STRING)
+RETURNS STRING
+COMMENT 'Product key: the code itself when shared across chains, else CHAIN:code'
+RETURN CASE WHEN workspace.silver.item_scope(item_code, item_type) = 'shared' THEN item_code
+            ELSE concat(chain, ':', item_code) END
+""")
+
+key_test = spark.sql("""
+SELECT
+  workspace.silver.item_key('KESHET', '6438', '0')          AS chain_only,
+  workspace.silver.item_key('KESHET', '7290107280679', '0') AS barcode_13,
+  workspace.silver.item_key('KESHET', '12345', '1')         AS item_type_1,
+  workspace.silver.item_scope('7290107280679', '0')         AS scope_barcode
+""").first()
+print(key_test)
+assert (key_test.chain_only, key_test.barcode_13, key_test.item_type_1, key_test.scope_barcode) == \
+       ("KESHET:6438", "7290107280679", "12345", "shared")

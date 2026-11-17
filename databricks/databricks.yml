@@ -61,6 +61,7 @@ resources:
         - task_key: build_items
           depends_on:
             - task_key: build_stores
+            - task_key: create_functions
           notebook_task:
             notebook_path: ./notebooks/silver_items.py
         - task_key: build_dq
@@ -170,6 +171,22 @@ resources:
             notebook_path: ./notebooks/ops_run_log.py
             base_parameters:
               job_run_id: "{{job.run_id}}"
+    # Gold (milestone 4): facts first, marts later. Started by daily_load after silver.
+    gold_load:
+      name: gold_load
+      max_concurrent_runs: 1
+      tasks:
+        - task_key: build_facts
+          notebook_task:
+            notebook_path: ./notebooks/gold_facts.py
+        - task_key: log_run
+          run_if: ALL_DONE
+          depends_on:
+            - task_key: build_facts
+          notebook_task:
+            notebook_path: ./notebooks/ops_run_log.py
+            base_parameters:
+              job_run_id: "{{job.run_id}}"
     daily_load:
       name: daily_load
       max_concurrent_runs: 1
@@ -190,3 +207,9 @@ resources:
             - task_key: run_bronze
           run_job_task:
             job_id: ${resources.jobs.silver_load.id}
+        # gold runs only if silver succeeded (a DQ FAIL stops silver, so gold never reads a bad load)
+        - task_key: run_gold
+          depends_on:
+            - task_key: run_silver
+          run_job_task:
+            job_id: ${resources.jobs.gold_load.id}

@@ -106,7 +106,7 @@ kept AS (
     AND price > 0
 )
 SELECT *,
-  CASE WHEN item_type = '1' OR item_code RLIKE '^([0-9]{8}|[0-9]{12,13})$' THEN 'shared' ELSE 'chain' END AS item_scope
+  workspace.silver.item_scope(item_code, item_type) AS item_scope  -- rule lives in silver_functions
 FROM kept
 """, args={"last_load": last_load, "reload_chain": reload_chain})
 
