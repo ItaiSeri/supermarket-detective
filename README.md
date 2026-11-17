@@ -536,6 +536,18 @@ Managed Delta table, clustered by `product_key`, rebuilt in full by `gold_dims.p
 
 Checked November 17th, 2026: 324,565 rows (296,607 shared), 127,414 active, 0 with a category.
 
+### Gold table: `workspace.gold.store_size_signals`
+
+A helper for `dim_store`, not for Power BI, and it decides nothing yet: no column says a store's final size. Managed Delta table, rebuilt in full by `gold_dims.py` (task `build_dims`) in every `gold_load` run. One row per `chain` + `store_id`, for physical stores (`silver.stores.is_physical`) except Shufersal Be (`sub_chain_id = '5'`); 849 rows on November 17th, 2026. The notebook stops if a key repeats or the row count differs from the in-scope stores.
+
+**Signal 1, product count.** `days_observed` = distinct `file_date` of the store in `silver.price_obs` in the last 30 days; `median_products` = median over those days of the price rows per day. With fewer than 5 days, `size_by_count` stays NULL (reason `fewer than 5 days of files`). `chain_ratio` = `median_products` / the 75th percentile of `median_products` over the chain's stores with 5 or more days. A store with `chain_ratio` below 0.25 is `suspect` (probably incomplete files) and is left out of the gap search. Gap rule, per chain: sort the remaining stores by `chain_ratio`, take the largest jump between neighbours (next / previous); it is a real gap only if the jump is at least 1.25 and at least 3 stores sit on each side. Then the stores below are `small` and those above `full`; otherwise every one of them is NULL. `size_by_count_reason` says which case applied (the gap as `gap 8.1k -> 10.2k (x1.26)`, `no gap >= x1.25 in chain`, a jump with too few stores on a side, `ratio < 0.25`).
+
+**Signal 2, location keywords.** Seed `databricks/seed/store_location_keywords.csv` (`keyword`, `location_type`: `industrial`, `mall`, `commercial_center`; edit it to change the list). A keyword matches `store_name` or `address` only as a whole word: not touching a letter or digit on either side, case-insensitive (so `BIG` matches). `location_type` and `location_keyword` hold the winner: industrial before mall before commercial_center, then the longest keyword; other matching types go to `location_other_matches`.
+
+**The chain's own label, for comparison only.** `format_label`: Shufersal and Mahsani Ashuk take `SubChainName` from the store's Stores file; Carrefour takes `היפר`, `מרקט` or `סיטי` from `store_name`; Rami Levy is `רמי לוי בשכונה` for store numbers 700 to 799, else `רמי לוי`; other chains NULL. `label_size` is `small` for `שופרסל אקספרס`, `יש Good`, `ישבשכונה`, Carrefour `סיטי` and `רמי לוי בשכונה`, `full` for any other label, NULL without a label.
+
+Result on November 17th, 2026: no chain has a gap by the rule above, so `size_by_count` is `small` or `full` for no store; 9 stores are `suspect` (4 Hazi Hinam produce stores, 5 Rami Levy stores); 70 stores have a location type.
+
 ## Stores files: what the data looks like
 
 Checked on the latest Stores file of each of the 10 chains, collected 2026-11-09. Bronze keeps these values as published; silver handles them.
