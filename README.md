@@ -462,7 +462,7 @@ Managed Delta table, written by `databricks/notebooks/silver_dq.py` (job `silver
 
 ## Gold: the star (milestone 4)
 
-Design, lineage and the questions it answers: the "Gold layer design" section of `docs/architecture.html` (claude.ai/artifact/6fuqxaVS7aWoaqWakoTAUV). Built by `databricks/notebooks/gold_facts.py`, job `gold_load` (tasks `build_facts`, `log_run`), which `daily_load` starts after `silver_load` succeeds, so a DQ FAIL in silver stops gold. Rule: a fact is a stored table only when building it changes the grain; otherwise it is a view over silver. Marts read only the star.
+Design, lineage and the questions it answers: the "Gold layer design" section of `docs/architecture.html` (claude.ai/artifact/6fuqxaVS7aWoaqWakoTAUV). Built by `databricks/notebooks/gold_facts.py` (facts) and `gold_dims.py` (dimensions), job `gold_load` (tasks `build_facts`, `build_dims`, `log_run`; the two builds are independent), which `daily_load` starts after `silver_load` succeeds, so a DQ FAIL in silver stops gold. Rule: a fact is a stored table only when building it changes the grain; otherwise it is a view over silver. Marts read only the star.
 
 **Product key rule:** SQL functions `workspace.silver.item_scope(item_code, item_type)` and `workspace.silver.item_key(chain, item_code, item_type)`, created by `silver_functions.py` (with a self-test). `silver_items` and gold both call them, so the S5 rule lives once: the code itself when shared (ItemType 1, or 8/12/13 digits), else `CHAIN:code`. `store_key` = `CHAIN:store_id`.
 
@@ -482,6 +482,29 @@ Managed Delta table, clustered by `store_key`, `product_key`, rebuilt in full ea
 | `values_changed` | True when any deal value above differed between days; the day-by-day detail stays in `promotion_obs` |
 
 The notebook stops with an error unless `sum(days_observed)` equals the rows of `promotion_obs` and the price view has the rows of `price_history`. First run 2026-11-17 (2 min 47 s): 23,503,304 deals from 180,136,889 daily rows; 5,577,567 (24%) have `values_changed`. Per column, the share of deals whose value changes is largest for `min_purchase_amount`, `max_qty`, `end_at` (each about 8-9%), `discounted_price` and `discount_rate` (about 4-5%); most are re-encodings, some real (an extended end date). Working out the real price per unit of a deal (1+1 = half price) is the fake-promotions mart's job.
+
+### Gold table: `workspace.gold.dim_date`
+
+Managed Delta table, rebuilt in full by `gold_dims.py` (task `build_dims`) in every `gold_load` run, because `chains_with_prices` changes every day. One row per calendar day, September 1st, 2024 to December 31st, 2027 (1,217 rows, key `date`); the notebook stops if the dates repeat, the count differs or 2026-11-17 is not weekday 3.
+
+| Column | Type | Meaning |
+|---|---|---|
+| `date` | date | The day |
+| `year`, `month`, `day_of_month` | int | Calendar parts |
+| `month_name`, `weekday_name` | string | English names |
+| `weekday` | int | Israeli week: 1 = Sunday ... 7 = Saturday |
+| `is_weekend` | boolean | Friday or Saturday |
+| `week_start` | date | The Sunday on or before the date |
+| `holiday_name` | string | English holiday name when the date is inside a holiday span (eve to last day, inclusive), else NULL |
+| `is_holiday`, `is_hanukkah` | boolean | `holiday_name` is not NULL; `holiday_name` is `hanukkah` |
+| `next_holiday_name`, `days_to_next_holiday` | string, int | The first holiday whose start (eve) is strictly after the date, and the days until then. On a holiday day, or on its eve, this is the following holiday |
+| `hanukkah_year`, `days_from_hanukkah_start` | int | Nearest Hanukkah (its starting year) and the signed days from its start (eve): negative before, 0 on the eve. For the Hanukkah index window -21 to +7. NULL when the nearest start is more than 60 days away |
+| `chains_with_prices` | int | Distinct chains with rows in `silver.price_obs` for that `file_date` (0 when none, also for future dates) |
+| `data_coverage` | string | `full` = 8 or more of the 10 chains, `partial` = 1 to 7, `none` = 0 |
+
+**Holiday seed.** `databricks/seed/holidays.csv` (committed) is made on the laptop by `databricks/seed/make_holidays.py`, which computes the dates with the Hebrew-calendar library `convertdate` and cross-checks every date against `hdate` and `holidays` (Israel); it exits with an error on any disagreement. Databricks only reads the CSV: the bundle syncs `seed/` next to the notebooks and `gold_dims.py` reads `../seed/holidays.csv`. Columns: `holiday_name` (`rosh_hashana`, `yom_kippur`, `sukkot`, `hanukkah`, `purim`, `passover`, `independence_day`, `shavuot`), `holiday_name_he`, `holiday_year` (the Gregorian year of `start_date`), `start_date`, `end_date`. **Eve rule:** `start_date` is the EVE, the date whose evening the holiday begins, because shoppers buy before; `end_date` is the last day. Sukkot runs through Simchat Torah (22 Tishri in Israel), Passover is all 7 days, Purim is the 14th of Adar (Adar II in a leap year, Shushan Purim not included), and for Independence Day the start is Memorial Day (the observed day moves: from Friday or Saturday to Thursday, from Monday to Tuesday) and the end is the observed day. Hanukkah spans: December 25th, 2024 to January 2nd, 2025; December 14th to 22nd, 2025; December 4th to 12th, 2026; December 24th, 2027 to January 1st, 2028. The seed covers every holiday that touches the table's date range; to extend the range, change the years in the script, run it and commit the CSV.
+
+Checked 2026-11-17: 1,217 rows and distinct dates; coverage `full` on 171 days (October 21st, 2024 to today), `partial` on 71 (the earliest backfilled days, January 11th, 2025 to November 14th, 2026), `none` on 975 (including all future dates); 116 days fall in the Hanukkah window -21 to +7 (counting all four Hanukkah years).
 
 ## Stores files: what the data looks like
 

@@ -179,10 +179,14 @@ resources:
         - task_key: build_facts
           notebook_task:
             notebook_path: ./notebooks/gold_facts.py
+        - task_key: build_dims
+          notebook_task:
+            notebook_path: ./notebooks/gold_dims.py
         - task_key: log_run
           run_if: ALL_DONE
           depends_on:
             - task_key: build_facts
+            - task_key: build_dims
           notebook_task:
             notebook_path: ./notebooks/ops_run_log.py
             base_parameters:
