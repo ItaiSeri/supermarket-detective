@@ -7,10 +7,10 @@ item_key,eval_set,name,true_category,round1_category,round1_confidence
 7290115190915,round1_review,נקסט לבן XL טבק לגלג,tobacco,tobacco,0.87
 7290018755686,round1_review,אסקימו אבטיח,sweets_snacks,soft_drinks,0.85
 7290016867114,round1_review,לחם קל כוסמין מלא 45,bread_bakery,bread_bakery,0.78
-3560231065461,round1_review,כיסא קמפינג מתקפל FO,other_nonfood,other_nonfood,0.65
+3560231065461,round1_review,כיסא קמפינג מתקפל FO,home_kitchen,other_nonfood,0.65
 7290016272017,round1_review,זיתים ירוקים מנזלינו,prepared_other_food,prepared_other_food,0.65
 MAHSANI_ASHUK_NEW_SOURCE:5103123,round1_review,ג`בטה 180 קפואה,bread_bakery,prepared_other_food,0.55
-7290019308201,round1_review,"מנגו 1ק""ג",fresh_fruit,fresh_fruit,0.92
+7290019308201,round1_review,"מנגו 1ק""ג",AMBIGUOUS,fresh_fruit,0.92
 4810168062217,round1_review,בלינצ'ס במילוי תפוח עץ וקינמון מוקפאים,prepared_other_food,prepared_other_food,0.72
 8710448641551,round1_review,רוטב צדר מקורי 850 מ,prepared_other_food,prepared_other_food,0.85
 7290107944380,round1_review,אגוזי 45 גרם,sweets_snacks,sweets_snacks,0.65
@@ -18,7 +18,7 @@ MAHSANI_ASHUK_NEW_SOURCE:5103123,round1_review,ג`בטה 180 קפואה,bread_ba
 7290119054084,round1_review,עוגיות סבלה שקדים חל,sweets_snacks,sweets_snacks,0.78
 7290000311845,round1_review,עוגיות חיטה ללא סוכר,sweets_snacks,sweets_snacks,0.88
 7290121290586,round1_review,אל.די סלימס פאקט 10,tobacco,cleaning_laundry,0.78
-7290017928463,round1_review,מאיר בייגלסמאש שברי,bread_bakery,bread_bakery,0.75
+7290017928463,round1_review,מאיר בייגלסמאש שברי,sweets_snacks,bread_bakery,0.75
 7290002657866,round1_review,פילה אמנון בדץ,fish,fish,0.6
 6920220000717,round1_review,קישוט פפיון במגוון צ,toys_stationery_seasonal,bread_bakery,0.55
 VICTORY_NEW_SOURCE:1319369,round1_review,בשר  מס`10 צוואר חלק,meat_poultry,meat_poultry,0.94
@@ -46,7 +46,7 @@ VICTORY_NEW_SOURCE:1319369,round1_review,בשר  מס`10 צוואר חלק,meat_
 6911241022369,round1_review,קישוט עץ אדום-זהב 6,toys_stationery_seasonal,toys_stationery_seasonal,
 8445291362178,round1_review,קפסולות סטארבקס האוס,coffee_tea,coffee_tea,0.78
 7290013994813,round1_review,שעועית שחורה אורגני 500 גרם הרדוף,grains_pasta_legumes,grains_pasta_legumes,0.93
-3800200450981,round1_review,טוסט קרים ציז 70 גרם,bread_bakery,bread_bakery,0.78
+3800200450981,round1_review,טוסט קרים ציז 70 גרם,AMBIGUOUS,bread_bakery,0.78
 8006530264495,round1_review,פמפרס בייבי דריי מיד,baby_care,baby_care,0.86
 7296073722717,round1_review,נייר טואלט לח 3*40י XPO,paper_disposables,paper_disposables,0.93
 8718951593190,round1_review,פלמוליב סבון גוף סמו,personal_care,personal_care,0.85
@@ -73,7 +73,7 @@ VICTORY_NEW_SOURCE:355917,round1_review,לחמניה כריך ח.מלאה בונ
 3600523193158,round1_review,תרסיס לכיסוי מיידי של שורשי השיער חום,personal_care,personal_care,0.78
 7290117538005,round1_review,סרום בוסטר ויטמין סי30מל,personal_care,personal_care,0.73
 7290111347832,round1_review,ניקול כפפות ניטריל מידה L,other_nonfood,other_nonfood,0.55
-7290011115258,round1_review,סבון מוצק נקה 7 ירוק,cleaning_laundry,personal_care,0.65
+7290011115258,round1_review,סבון מוצק נקה 7 ירוק,AMBIGUOUS,personal_care,0.65
 7290015641128,round1_review,תבנית אלומיניום גסטרונום,home_kitchen,home_kitchen,0.85
 7290002391777,round1_review,"קבב עגל כשל""פ 440 גרם",meat_poultry,meat_poultry,0.9
 7290108357448,round1_review,קרם גוף קרמה לבנדר ואקליפטוס,personal_care,personal_care,0.78
@@ -96,7 +96,7 @@ VICTORY_NEW_SOURCE:355917,round1_review,לחמניה כריך ח.מלאה בונ
 7290109923765,round1_review,ניקוי אסלה WC MAXI זוג 110גר,cleaning_laundry,cleaning_laundry,0.93
 5900951307249,round1_review,M&M's בוטנים 45 גרם,sweets_snacks,sweets_snacks,0.85
 8000215204554,round1_review,משקה אורז עם קוקוס אורגני,dairy_eggs,soft_drinks,0.78
-5035766044673,round1_review,משקה סיידר תפוחים אל,soft_drinks,soft_drinks,0.65
+5035766044673,round1_review,משקה סיידר תפוחים אל,alcohol,soft_drinks,0.65
 8006545105691,round1_review,נרות נקודות/פסים/כוכ,toys_stationery_seasonal,other_nonfood,0.55
 3574661610375,round1_review,ניוטרוג'ינה קרם לחות מרגיע וקליל,personal_care,personal_care,0.85
 7290018443057,round1_review,נבטי חמניה  (תקומה),fresh_vegetables,fresh_vegetables,0.85
@@ -108,7 +108,7 @@ VICTORY_NEW_SOURCE:355917,round1_review,לחמניה כריך ח.מלאה בונ
 7262626088739,round1_review,משקפי קריאה,other_nonfood,other_nonfood,0.7
 7290000913094,round1_review,לב הכתף בקר קפוא חלק,meat_poultry,meat_poultry,0.92
 8022836001237,round1_review,"פיצולטו קברנה סוביניון אורגני 750 מ""ל",alcohol,alcohol,0.85
-6985462458139,round1_review,אוזניות בלוטוס TWS דגם I12,other_nonfood,other_nonfood,0.85
+6985462458139,round1_review,אוזניות בלוטוס TWS דגם I12,home_kitchen,other_nonfood,0.85
 7290014152588,round1_review,יין מדמואזל רוזה יבש,alcohol,alcohol,0.92
 3361618,round1_review,פילה סלמון שלם טרי,fish,fish,0.92
 6290360379012,round1_review,"בלו מגישן אדפ 100מ""ל",personal_care,personal_care,0.75
@@ -136,7 +136,7 @@ VICTORY_NEW_SOURCE:355917,round1_review,לחמניה כריך ח.מלאה בונ
 7290100243671,new_blind,מרכך כביסה מרוכז בדים אקסטרה בניחוח יסמין מרענן,cleaning_laundry,,
 7290002105305,new_blind,בשר מס 10 צוואר מחיר,meat_poultry,,
 7290006788375,new_blind,"קרליין דאודורנט נושם+ סטיק PURE ורוד 50 מ""ל",personal_care,,
-7290001865453,new_blind,פמלי לקשרי 1ליטר לבנדר ארומטי+משאבה,personal_care,,
+7290001865453,new_blind,פמלי לקשרי 1ליטר לבנדר ארומטי+משאבה,AMBIGUOUS,,
 7290016006346,new_blind,"מי סודה - מארז 6 בקבוקים 500 מ""ל",soft_drinks,,
 7290003751143,new_blind,"גרונות עוף קפוא בד""ץ לקג",meat_poultry,,
 7290020394699,new_blind,"אטריות שעועית ""חמישייה"" 250 גרם ללא גלוטן",grains_pasta_legumes,,
@@ -171,7 +171,7 @@ VICTORY_NEW_SOURCE:355917,round1_review,לחמניה כריך ח.מלאה בונ
 7290006511706,new_blind,גבינת גאודה עם כמון שקיל,dairy_eggs,,
 7290011498580,new_blind,מרציפן אורגני 200 גר שקד תבור,sweets_snacks,,
 7290005854606,new_blind,אסקימו אננס גלידות שטראוס,sweets_snacks,,
-7290016566185,new_blind,"בקבוק שתיה 550 מ""ל.",home_kitchen,,
+7290016566185,new_blind,"בקבוק שתיה 550 מ""ל.",AMBIGUOUS,,
 7290006739407,new_blind,שניצל תירס לייט 98 קלוריות זוגלובק טבע 630 גרם,prepared_other_food,,
 7290013153395,new_blind,מיץ סחוט רימונים טבעי פריגת (1 ליטר),soft_drinks,,
 8445291028920,new_blind,מחית תפוח עץ ובננה 190 גר כשלפ מטרנה אס,baby_food,,
@@ -203,7 +203,7 @@ KESHET:135,new_blind,חבוש,fresh_fruit,,
 7290119040858,new_blind,עוגיות מקלות עלים 500 גר,sweets_snacks,,
 4820074820351,new_blind,שיבולת שועל 1 קג,grains_pasta_legumes,,
 7290015008846,new_blind,קעריות אובלי עבות 25 יח,paper_disposables,,
-7290022005364,new_blind,תערובת כדורי שוקולד רמי לוי 560 גרם,grains_pasta_legumes,,
+7290022005364,new_blind,תערובת כדורי שוקולד רמי לוי 560 גרם,AMBIGUOUS,,
 733619601220,new_blind,עגול שחור מגירה פפיו,AMBIGUOUS,,
 7290009955019,new_blind,משקה מצונן 1.5 ליטר,soft_drinks,,
 7290006390806,new_blind,חצי ג'בטה,bread_bakery,,
