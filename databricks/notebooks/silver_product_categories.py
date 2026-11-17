@@ -13,6 +13,7 @@ mode = dbutils.widgets.get("mode")
 sample_size = int(dbutils.widgets.get("sample_size"))
 assert mode in ("pilot", "eval"), f"mode must be 'pilot' or 'eval', got {mode!r}"
 half = sample_size // 2
+run_eval = (mode == "eval")
 
 # COMMAND ----------
 
