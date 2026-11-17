@@ -9,9 +9,14 @@ import json, time
 dbutils.widgets.text("mode", "pilot")
 dbutils.widgets.text("sample_size", "1000")
 dbutils.widgets.text("job_run_id", "")  # the bundle passes {{job.run_id}}, so the run can be found in system.billing.usage
+# mode 'full' (the real classification, resumable) uses these four
+dbutils.widgets.text("model", "databricks-gpt-oss-120b")
+dbutils.widgets.text("prompt_version", "v2")
+dbutils.widgets.text("batch_size", "5000")
+dbutils.widgets.text("max_minutes", "150")  # no new batch starts after this many minutes
 mode = dbutils.widgets.get("mode")
 sample_size = int(dbutils.widgets.get("sample_size"))
-assert mode in ("pilot", "eval"), f"mode must be 'pilot' or 'eval', got {mode!r}"
+assert mode in ("pilot", "eval", "full"), f"mode must be 'pilot', 'eval' or 'full', got {mode!r}"
 half = sample_size // 2
 run_eval = (mode == "eval")
 
@@ -84,26 +89,24 @@ def sql_lit(text):
     return "'" + text.replace("\\", "\\\\").replace("'", "\\'") + "'"
 
 
-if run_eval:
-    import pandas as pd
-    eval_pd = pd.read_csv("../seed/category_eval.csv", dtype=str)
-    assert len(eval_pd) == 240, f"expected 240 eval rows, got {len(eval_pd)}"
-    spark.createDataFrame(eval_pd[["item_key", "eval_set", "name", "true_category"]]).createOrReplaceTempView("eval_csv")
-
-    # Input text v2: longest name in `names`; manufacturer only if a real value; quantity + unit only if clean
-    # (unit not NULL / Unknown / 1, no '?' and no digits after dropping a leading per-100 prefix).
-    spark.sql("""
-    CREATE OR REPLACE TEMP VIEW eval_input AS
+def input_text_query(source, keep_cols, view_name):
+    """SQL creating temp view `view_name` with keep_cols (comma list, may use aliases) plus input_text v2.
+    `source` is a FROM clause where the items table is aliased `i`.
+    Input text v2: longest name in `names`; manufacturer only if a real value; quantity + unit only if clean
+    (unit not NULL / Unknown / 1, no '?' and no digits after dropping a leading per-100 prefix)."""
+    outer = ", ".join(c.split(".")[-1].strip() for c in keep_cols.split(","))
+    return f"""
+    CREATE OR REPLACE TEMP VIEW {view_name} AS
     WITH j AS (
-      SELECT e.item_key, e.eval_set,
+      SELECT {keep_cols},
              coalesce(nullif(trim(aggregate(i.names, '', (acc, x) -> CASE WHEN length(x) > length(acc) THEN x ELSE acc END)), ''),
                       trim(i.item_name)) AS nm,
              trim(i.manufacturer_name) AS mf,
              i.quantity AS qty,
              trim(regexp_replace(trim(i.unit_of_measure), '^100[ ]+', '')) AS unit
-      FROM eval_csv e LEFT JOIN workspace.silver.items i ON i.item_key = e.item_key
+      FROM {source}
     )
-    SELECT item_key, eval_set,
+    SELECT {outer},
            concat_ws(' | ', nm,
              CASE WHEN mf IS NOT NULL AND length(mf) > 1
                        AND lower(mf) NOT IN (',', 'לא ידוע', 'כללי', 'שונות', 'unknown')
@@ -112,21 +115,34 @@ if run_eval:
                        AND lower(unit) NOT IN ('unknown', '1') AND instr(unit, '?') = 0 AND unit NOT RLIKE '[0-9]'
                   THEN concat(regexp_replace(CAST(CAST(qty AS DOUBLE) AS STRING), '[.]0$', ''), ' ', unit) END
            ) AS input_text
-    FROM j
-    """)
+    FROM j"""
+
+
+# the ai_query prompt (prompt version v2) and JSON schema, shared by mode eval and mode full
+label_list_txt = "\n".join(f"- {k}: {v[0]}" for k, v in LABELS.items())
+enum_json = json.dumps(list(LABELS.keys()))
+schema_json = ('{"type":"json_schema","json_schema":{"name":"category","strict":true,"schema":{"type":"object",'
+               '"properties":{"category":{"type":"string","enum":' + enum_json + '},"confidence":{"type":"number"}},'
+               '"required":["category","confidence"],"additionalProperties":false}}}')
+prompt_prefix = (HINTS + "\n\nThe categories (key: Hebrew description):\n" + label_list_txt +
+                 "\n\nReturn only JSON like {\"category\": \"<one of the category keys above>\", \"confidence\": <number between 0 and 1>}.\n\nProduct: ")
+
+
+
+if run_eval:
+    import pandas as pd
+    eval_pd = pd.read_csv("../seed/category_eval.csv", dtype=str)
+    assert len(eval_pd) == 240, f"expected 240 eval rows, got {len(eval_pd)}"
+    spark.createDataFrame(eval_pd[["item_key", "eval_set", "name", "true_category"]]).createOrReplaceTempView("eval_csv")
+
+    # Input text v2 (see input_text_query above)
+    spark.sql(input_text_query("eval_csv e LEFT JOIN workspace.silver.items i ON i.item_key = e.item_key",
+                               "e.item_key, e.eval_set", "eval_input"))
     n_match = spark.sql("SELECT count(*) FROM eval_csv e JOIN workspace.silver.items i ON i.item_key = e.item_key").first()[0]
     n_input = spark.sql("SELECT count(*) FROM eval_input WHERE input_text IS NOT NULL AND trim(input_text) <> ''").first()[0]
     assert n_match == 240 and n_input == 240, f"eval join: {n_match} items matched, {n_input} non-empty inputs, expected 240"
     # materialise the inputs once, so the three methods see exactly the same text
     spark.sql("CREATE OR REPLACE TABLE workspace.silver.product_categories_eval_input AS SELECT * FROM eval_input")
-
-    label_list_txt = "\n".join(f"- {k}: {v[0]}" for k, v in LABELS.items())
-    enum_json = json.dumps(list(LABELS.keys()))
-    schema_json = ('{"type":"json_schema","json_schema":{"name":"category","strict":true,"schema":{"type":"object",'
-                   '"properties":{"category":{"type":"string","enum":' + enum_json + '},"confidence":{"type":"number"}},'
-                   '"required":["category","confidence"],"additionalProperties":false}}}')
-    prompt_prefix = (HINTS + "\n\nThe categories (key: Hebrew description):\n" + label_list_txt +
-                     "\n\nReturn only JSON like {\"category\": \"<one of the category keys above>\", \"confidence\": <number between 0 and 1>}.\n\nProduct: ")
 
     # results go into one Delta table, one INSERT per method, so each method's statement is timed on its own
     spark.sql("""CREATE OR REPLACE TABLE workspace.silver.product_categories_eval (
@@ -171,6 +187,114 @@ if run_eval:
           spark.sql(f"SELECT method, count(*), count(category), count_if(category IS NOT NULL AND category NOT IN ({valid})) "
                     "FROM workspace.silver.product_categories_eval GROUP BY method").collect())
     dbutils.notebook.exit(json.dumps({"mode": "eval", "seconds": {k: round(v, 1) for k, v in timings.items()}}))
+
+# COMMAND ----------
+
+# ---------------------------------------------------------------------------------------------
+# mode 'full': classify every active, non-Be product with ai_query, in batches, resumable.
+# Results: silver.product_categories_ai (one row per item_key + model + prompt_version, successes only, never replaced).
+# A rerun picks up the products that have no row yet for (model, prompt_version): nothing is done twice.
+# Batch log: silver.product_categories_ai_batches.
+# ---------------------------------------------------------------------------------------------
+if mode == "full":
+    model = dbutils.widgets.get("model")
+    prompt_version = dbutils.widgets.get("prompt_version")
+    batch_size = int(dbutils.widgets.get("batch_size"))
+    max_minutes = float(dbutils.widgets.get("max_minutes"))
+    run_start = time.time()
+    RES = "workspace.silver.product_categories_ai"
+    LOG = "workspace.silver.product_categories_ai_batches"
+    SCOPE = "workspace.silver.product_categories_ai_scope"
+    TMP = "workspace.silver.product_categories_ai_tmp"
+    valid = ",".join(f"'{k}'" for k in LABELS)
+
+    spark.sql(f"""CREATE TABLE IF NOT EXISTS {RES} (
+        item_key STRING, model STRING, prompt_version STRING, input_text STRING, category STRING,
+        raw_result STRING, error_message STRING, batch_id STRING, classified_at TIMESTAMP)
+        COMMENT 'ai_query category per product (successes only, never replaced; a failed product has no row and is retried by the next run). One row per item_key + model + prompt_version. Written by notebook silver_product_categories.py mode=full.'""")
+    spark.sql(f"""CREATE TABLE IF NOT EXISTS {LOG} (
+        batch_id STRING, model STRING, prompt_version STRING, started_at TIMESTAMP, seconds DOUBLE,
+        rows_sent BIGINT, rows_ok BIGINT, rows_error BIGINT, sample_error STRING)
+        COMMENT 'One row per ai_query batch of mode=full.'""")
+
+    # Scope, built once per run: active products (last_seen within 14 days of the newest), minus products
+    # sold only in Shufersal Be stores (sub_chain_id 5; Be is out of gold). Most-shared products first.
+    spark.sql(input_text_query(
+        """workspace.silver.items i
+        WHERE i.last_seen >= (SELECT date_sub(max(last_seen), 14) FROM workspace.silver.items)
+          AND i.item_name IS NOT NULL AND trim(i.item_name) <> ''
+          AND i.item_key IN (
+            SELECT workspace.silver.item_key(ph.chain, ph.item_code, ph.item_type)
+            FROM workspace.silver.price_history ph
+            LEFT JOIN workspace.silver.stores s ON s.chain = ph.chain AND s.store_id = ph.store_id
+            WHERE ph.last_seen >= date_sub(current_date(), 14)
+              AND NOT (ph.chain = 'SHUFERSAL' AND s.sub_chain_id = '5'))""",
+        "i.item_key, i.chains_count", "full_scope_v"))
+    spark.sql(f"CREATE OR REPLACE TABLE {SCOPE} AS SELECT * FROM full_scope_v "
+              "WHERE input_text IS NOT NULL AND trim(input_text) <> ''")
+    n_scope = spark.table(SCOPE).count()
+    print(f"scope: {n_scope} products; model {model}, prompt {prompt_version}, batch {batch_size}, max {max_minutes} min")
+
+    def remaining():
+        return spark.sql(f"""SELECT count(*) FROM {SCOPE} s WHERE NOT EXISTS (
+            SELECT 1 FROM {RES} r WHERE r.item_key = s.item_key AND r.model = {sql_lit(model)}
+              AND r.prompt_version = {sql_lit(prompt_version)})""").first()[0]
+
+    stop_reason = "nothing left"
+    left = remaining()
+    n_batches = 0
+    done_rows = 0
+    total_secs = 0.0
+    while left > 0:
+        if (time.time() - run_start) / 60 > max_minutes:
+            stop_reason = f"max_minutes ({max_minutes}) passed, {left} products left"
+            break
+        batch_id = f"{time.strftime('%Y%m%d-%H%M%S')}-{n_batches}"
+        started = time.time()
+        spark.sql(f"""CREATE OR REPLACE TABLE {TMP} AS
+          WITH b AS (
+            SELECT s.item_key, s.input_text FROM {SCOPE} s
+            WHERE NOT EXISTS (SELECT 1 FROM {RES} r WHERE r.item_key = s.item_key AND r.model = {sql_lit(model)}
+                                AND r.prompt_version = {sql_lit(prompt_version)})
+            ORDER BY s.chains_count DESC, xxhash64(s.item_key) LIMIT {batch_size}),
+          r AS (
+            SELECT item_key, input_text,
+                   ai_query({sql_lit(model)}, concat({sql_lit(prompt_prefix)}, input_text),
+                            responseFormat => {sql_lit(schema_json)}, failOnError => false) AS res
+            FROM b)
+          SELECT item_key, input_text, try_parse_json(res.result):category::string AS category,
+                 CAST(res.result AS STRING) AS raw_result, res.errorMessage AS error_message
+          FROM r""")
+        sent, ok = spark.sql(f"SELECT count(*), count_if(category IN ({valid})) FROM {TMP}").first()
+        sample_err = spark.sql(f"""SELECT coalesce(max(error_message), max(concat('bad category: ', raw_result)))
+            FROM {TMP} WHERE category IS NULL OR category NOT IN ({valid})""").first()[0]
+        spark.sql(f"""INSERT INTO {RES}
+          SELECT item_key, {sql_lit(model)}, {sql_lit(prompt_version)}, input_text, category, raw_result, error_message,
+                 {sql_lit(batch_id)}, current_timestamp()
+          FROM {TMP} WHERE category IN ({valid})""")
+        secs = time.time() - started
+        spark.createDataFrame(
+            [(batch_id, model, prompt_version, float(secs), int(sent), int(ok), int(sent - ok), sample_err[:2000] if sample_err else None)],
+            "batch_id STRING, model STRING, prompt_version STRING, seconds DOUBLE, rows_sent BIGINT, rows_ok BIGINT, rows_error BIGINT, sample_error STRING"
+        ).createOrReplaceTempView("batch_row")
+        spark.sql(f"""INSERT INTO {LOG} SELECT batch_id, model, prompt_version,
+                      timestampadd(SECOND, CAST(-seconds AS INT), current_timestamp()), seconds,
+                      rows_sent, rows_ok, rows_error, sample_error FROM batch_row""")
+        n_batches += 1
+        done_rows += ok
+        total_secs += secs
+        left = remaining()
+        rate = ok / secs if secs else 0
+        eta = (left / (done_rows / total_secs) / 60) if done_rows else float("nan")
+        print(f"batch {batch_id}: sent {sent}, ok {ok}, errors {sent - ok}, {secs:.0f} s, {rate:.1f} rows/s; "
+              f"left {left}, estimated {eta:.0f} min at the average rate")
+        if sent == 0 or (sent - ok) > 0.2 * sent:
+            raise Exception(f"batch {batch_id}: {sent - ok} of {sent} rows failed (over 20%), stopping. "
+                            f"Sample error: {sample_err}. Saved batches stay; rerun to resume.")
+
+    summary = {"mode": "full", "batches": n_batches, "rows_ok": int(done_rows), "left": left, "stopped": stop_reason}
+    print(summary)
+    dbutils.notebook.exit(json.dumps(summary))
 
 # COMMAND ----------
 

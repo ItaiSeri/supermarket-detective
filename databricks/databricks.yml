@@ -196,13 +196,33 @@ resources:
     classify_products:
       name: classify_products
       max_concurrent_runs: 1
+      # mode=pilot | eval | full; full is the resumable ai_query run over all active non-Be products
+      # (no schedule, not in daily_load). Start it with: databricks bundle run classify_products --no-wait --params mode=full
+      parameters:
+        - name: mode
+          default: pilot
+        - name: sample_size
+          default: "1000"
+        - name: model
+          default: databricks-gpt-oss-120b
+        - name: prompt_version
+          default: v2
+        - name: batch_size
+          default: "5000"
+        - name: max_minutes
+          default: "150"
       tasks:
         - task_key: classify
+          timeout_seconds: 10800
           notebook_task:
             notebook_path: ./notebooks/silver_product_categories.py
             base_parameters:
-              mode: pilot
-              sample_size: "1000"
+              mode: "{{job.parameters.mode}}"
+              sample_size: "{{job.parameters.sample_size}}"
+              model: "{{job.parameters.model}}"
+              prompt_version: "{{job.parameters.prompt_version}}"
+              batch_size: "{{job.parameters.batch_size}}"
+              max_minutes: "{{job.parameters.max_minutes}}"
               job_run_id: "{{job.run_id}}"
     daily_load:
       name: daily_load
