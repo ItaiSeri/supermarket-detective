@@ -269,6 +269,8 @@ Checked 2026-11-10: 6,798 rows (2,068 `price_zero_or_less`, 4,730 `wrong_chain`)
 
 Managed Delta table, clustered by `file_date` and `chain`, filled by the same notebook and task as `promotion_obs` (`silver_promotion_obs.py`, task `build_promotion_obs`) from the bronze rows with `store_wide` = true: promotions that list more than 10,000 products in one source file (rule and the measured gap in the bronze section). One row per `chain` + `store_id` + `promotion_id` + `file_date`, saved with `MERGE` on that key; the scraper beats Kaggle, and inside one source the later file wins, as in `promotion_obs`. Its own watermark (latest `bronze_loaded_at` in this table). The products are not listed; `items_in_promotion` says how many there were.
 
+Not used by gold (decided by Itai 2026-11-17: coupons, donations and delivery fees are not deals on products). `discounted_price` here is one listed product's price, a different product each day, so it means nothing at this grain; `items_in_promotion` grows as the chain adds products. Grouping these rows by every column would split one promotion into a row per day.
+
 | Column | Type | Meaning |
 |---|---|---|
 | `chain`, `chain_id`, `store_id` | STRING | As in `promotion_obs` (store id without leading zeros; chain id from the file name when the header's is cut off) |
@@ -457,6 +459,29 @@ Managed Delta table, written by `databricks/notebooks/silver_dq.py` (job `silver
 **Price completeness (S6).** A run can report `ok` and still miss files, because the scraper swallows listing timeouts (a Shufersal run once missed 24 of 417 price files). Two checks compare each chain's newest Stores file (on or before the latest price date, physical stores only, as in `silver.stores`) with the stores that have rows in `price_obs` on a date. Measured 2026-11-08 to 2026-11-10 (stores listed, stores missing a price file): Shufersal 416, 1; Rami Levy 98, 0; Carrefour/Yeinot Bitan 144, 60 (about 42% every day, so it is that chain's normal level); Mahsani Ashuk 64, 0 to 1; Victory 67, 0 to 1; Yohananof 50, 3; Keshet 23, 1; Osher Ad 24, 0 to 1; Tiv Taam 47, 0; Hazi Hinam 12, 0. Because each chain has its own normal level, `price_store_completeness` compares a chain with itself: it counts the chains whose missing stores on the latest date exceed the median of the earlier days in the last 7 (days the chain published) by more than 2 stores and more than 3% of its stores, and gives a WARNING above 0. A chain with no earlier day is compared with itself, so it cannot warn on its first day. The Shufersal incident (24 extra missing, 5.8%) would trigger it; a single store of Osher Ad (4%) does not. `chain_without_price_files` is a FAIL above 0: a chain that lists stores but has no price rows at all on the latest date. Limits: "published" means rows in `price_obs`, so a store whose file was rejected completely counts as missing; the latest date is the newest `file_date` in `price_obs`, so a stray file with a later date would make it count every chain as missing.
 
 **Promotion checks.** They use the newest `file_date` in `promotion_obs`. `promotion_repeated_keys` (key `chain` + `store_id` + `promotion_id` + `group_id` + `item_code`, FAIL above 0); `promotion_reject_percent` is `promotion_quarantine` rows over kept plus rejected rows of that day (WARNING above 0.1, FAIL above 5, the same limits as for prices; 3 of 11.3 million rows on 2026-11-10); `promotion_expired_percent` is rows whose `end_at` is before the file date (0 on 2026-11-10, 104 rows or 0.001% on 2026-11-09), WARNING above 0.1 and never FAIL, since a chain may keep an ended promotion in the file. `store_wide_promotions_latest` is the most distinct store-wide promotions any chain had on that day (WARNING above 20, never FAIL).
+
+## Gold: the star (milestone 4)
+
+Design, lineage and the questions it answers: `docs/gold-design.html` (claude.ai/artifact/BZTUSsGgZt5Naig6aC3qGt). Built by `databricks/notebooks/gold_facts.py`, job `gold_load` (tasks `build_facts`, `log_run`), which `daily_load` starts after `silver_load` succeeds, so a DQ FAIL in silver stops gold. Rule: a fact is a stored table only when building it changes the grain; otherwise it is a view over silver. Marts read only the star.
+
+**Product key rule:** SQL functions `workspace.silver.item_scope(item_code, item_type)` and `workspace.silver.item_key(chain, item_code, item_type)`, created by `silver_functions.py` (with a self-test). `silver_items` and gold both call them, so the S5 rule lives once: the code itself when shared (ItemType 1, or 8/12/13 digits), else `CHAIN:code`. `store_key` = `CHAIN:store_id`.
+
+### Gold view: `workspace.gold.fact_price_period`
+
+View over `silver.price_history`, one row per store × product × price period. Columns: `store_key`, `product_key`, `price`, `unit_price`, `quantity`, `unit_of_measure`, `is_weighted`, `valid_from` (= `first_seen`), `valid_to` (= `last_seen`), `days_observed`, `is_current`. Checked 2026-11-17: 110,590,696 rows, the same as silver.
+
+### Gold table: `workspace.gold.fact_promotion_period`
+
+Managed Delta table, clustered by `store_key`, `product_key`, rebuilt in full each run (`CREATE OR REPLACE`; incremental "extend or insert" later). One row per `store_key` + `promotion_id` + `group_id` + product, from the daily rows of `silver.promotion_obs`. A promotion ID is the deal's identity, so a row is never split by its values (decided by Itai 2026-11-17): chains re-encode the same deal from day to day (Shufersal's 1+1 toothpaste was 50% / 19.90 on 11-09, no rate on 11-10, 100% / 0.00 from 11-11), and splitting would count one deal several times. A product in several promotions at once has a row for each (on 2026-11-12, 81% of Shufersal's promoted products and 17% of Rami Levy's were in 2 or more).
+
+| Column | Meaning |
+|---|---|
+| `store_key`, `product_key`, `promotion_id`, `group_id` | The row key (product key from the item type of the last day seen) |
+| `description`, `reward_type`, `min_qty`, `max_qty`, `deal_price` (`discounted_price`), `deal_unit_price` (`discounted_price_per_unit`), `discount_rate`, `discount_type`, `club_code`, `is_coupon`, `is_gift_item`, `allow_multiple_discounts`, `min_purchase_amount`, `start_at`, `end_at`, `source` | Values from the last day the deal was seen |
+| `first_seen`, `last_seen`, `days_observed` | First and last file date, and the number of days seen (a gap shows as `days_observed` < `last_seen` − `first_seen` + 1) |
+| `values_changed` | True when any deal value above differed between days; the day-by-day detail stays in `promotion_obs` |
+
+The notebook stops with an error unless `sum(days_observed)` equals the rows of `promotion_obs` and the price view has the rows of `price_history`. First run 2026-11-17 (2 min 47 s): 23,503,304 deals from 180,136,889 daily rows; 5,577,567 (24%) have `values_changed`. Per column, the share of deals whose value changes is largest for `min_purchase_amount`, `max_qty`, `end_at` (each about 8-9%), `discounted_price` and `discount_rate` (about 4-5%); most are re-encodings, some real (an extended end date). Working out the real price per unit of a deal (1+1 = half price) is the fake-promotions mart's job.
 
 ## Stores files: what the data looks like
 

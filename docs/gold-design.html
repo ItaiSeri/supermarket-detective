@@ -100,8 +100,8 @@ svg text { font-family: var(--f-mono); }
 <section>
   <div class="eyebrow">2 · Gold tables</div>
   <h2>A small star, plus one mart per question</h2>
-  <p>The star (3 dimensions, 3 facts) is the only thing that reads silver. Every mart reads only the star, so keys, filters (physical store, shared barcode) and business rules live in one place, and two charts can't disagree because they took a shortcut to silver. A fact is stored as a table only when building it does real work (changes the grain, or is too expensive to repeat); otherwise it's a view over silver. Marts are always tables, rebuilt daily. The one exception is <code>ops_health</code>, which reads pipeline metadata, not prices.</p>
-  <p>There are two promotion facts because they have different grains. A product deal has a product; a store-wide deal (coupon, basket discount, a 10%-off-everything day) has none. Putting both in one table would mean a NULL product on every store-wide row and double counting in any per-product sum.</p>
+  <p>The star (3 dimensions, 2 facts) is the only thing that reads silver. Every mart reads only the star, so keys, filters (physical store, shared barcode) and business rules live in one place, and two charts can't disagree because they took a shortcut to silver. A fact is stored as a table only when building it does real work (changes the grain, or is too expensive to repeat); otherwise it's a view over silver. Marts are always tables, rebuilt daily. The one exception is <code>ops_health</code>, which reads pipeline metadata, not prices.</p>
+  <p>Store-wide promotions (a promotion listing more than 10,000 products: coupons, donations, delivery fees) stay in silver and are not in gold: they are not deals on products (decided 2026-11-17). Product deals have one row per store × promotion × group × product. A promotion ID is the deal's identity, so the row is never split by its values: chains re-encode the same deal from day to day (Shufersal's 1+1 as 50% / 19.90 one day, 100% / 0.00 the next). The last day's values are kept, and <code>values_changed</code> flags a deal whose values differed. A product in two promotions at once gets two rows.</p>
   <div class="grid" id="tables"></div>
 </section>
 
@@ -134,7 +134,7 @@ svg text { font-family: var(--f-mono); }
   <div class="eyebrow">6 · Build order</div>
   <h2>Proposed sequence</h2>
   <ol class="steps">
-    <li><b>G0</b> facts: views <code>fact_price_period</code> and <code>fact_store_wide_promo</code> (keys + renames over silver); table <code>fact_promotion_period</code> (full rebuild during the backfill, then incremental MERGE with a watermark and a late-data path).</li>
+    <li><b>G0 ✓</b> facts in <code>gold_facts.py</code>, job <code>gold_load</code> after silver in <code>daily_load</code>: view <code>fact_price_period</code> (keys + renames over silver); table <code>fact_promotion_period</code> (full rebuild for now, then incremental: extend or insert). Product key rule is one SQL function, <code>silver.item_key</code>.</li>
     <li><b>G1</b> dimensions: <code>dim_store</code> (with a city table from the CBS locality codes), <code>dim_product</code>, <code>dim_date</code> with Hanukkah and other holidays.</li>
     <li><b>G2</b> <code>mart_eilat_gap</code>, plus the Carrefour check.</li>
     <li><b>G3</b> Power BI v1: one page on the Eilat question, Import mode from the SQL warehouse. Then the first X post.</li>
@@ -173,7 +173,6 @@ const B = {
   g_date:  [760, 100, "gold", "dim_date", "+ holidays"],
   g_fact:  [760, 150, "gold", "fact_price_period", "view · store × product × period"],
   g_pfact: [760, 190, "gold", "fact_promotion_period", "table · deal × store × product"],
-  g_swf:   [760, 230, "gold", "fact_store_wide_promo", "view · deal × store"],
   m_eilat: [760, 290, "gold", "mart_eilat_gap", "chain × date"],
   m_bask:  [760, 335, "gold", "mart_basket_index", "chain × city × date"],
   m_fake:  [760, 380, "gold", "mart_fake_promos", "deal × store × product"],
@@ -191,9 +190,9 @@ const E = [
   ["b_store","s_store"],["b_price","s_items"],["b_price","s_obs"],["b_price","s_q"],
   ["b_promo","s_pobs"],["b_promo","s_swp"],["b_promo","s_q"],
   ["s_obs","s_hist","v"],
-  ["s_store","g_store"],["s_items","g_prod"],["s_hist","g_fact"],["s_pobs","g_pfact"],["s_swp","g_swf"],
+  ["s_store","g_store"],["s_items","g_prod"],["s_hist","g_fact"],["s_pobs","g_pfact"],
   ["g_fact","m_eilat","l"],["g_fact","m_bask","l"],["g_fact","m_fake","l"],["g_fact","m_move","l"],["g_fact","m_hol","l"],
-  ["g_pfact","m_fake","l"],["g_pfact","m_hol","l"],["g_swf","m_fake","l"],
+  ["g_pfact","m_fake","l"],["g_pfact","m_hol","l"],
   ["s_q","m_ops"],
   ["m_eilat","pbi"],["m_bask","pbi"],["m_fake","pbi"],["m_move","pbi"],["m_hol","pbi"],["m_ops","pbi"],
   ["m_eilat","x"],["m_fake","x"],["m_hol","x"],
@@ -242,12 +241,9 @@ const T = [
   {k:"fact", name:"gold.fact_price_period", where:"dbx", grain:"one row per <b>store × product × price period</b>", mat:"view", size:"~108M rows, no copy · stays in Databricks",
    cols:"store_key, product_key, price, unit_price, quantity, valid_from, valid_to, days_observed, is_current, source",
    from:"silver.price_history, renamed columns + gold keys (the S5 shared-barcode-or-chain:code rule lives here once). Silver already has this grain, so a copy would only duplicate 108M rows a day. Becomes a table with liquid clustering on date + store only if query speed demands it."},
-  {k:"fact", name:"gold.fact_promotion_period", where:"dbx", grain:"one row per <b>deal × store × product × period seen</b>", mat:"table", size:"collapses ~11.5M daily rows into periods · stays in Databricks",
-   cols:"store_key, product_key, promotion_id, group_id, description, reward_type, min_qty, max_qty, deal_price, deal_unit_price, discount_rate, club_only, is_coupon, start_at, end_at, valid_from, valid_to, days_observed, is_current",
-   from:"silver.promotion_obs, daily sightings collapsed into periods (same idea as price_history). A table because it changes the grain. Daily load: MERGE only file dates after the watermark; same values → extend valid_to; changed values (deal price, min qty, reward type, declared start/end) → close + open a new period; new key → insert; store file arrived but key absent → close; store file missing → no change. A date older than the watermark (Kaggle backfill) → delete that key's periods from that date on and rebuild those keys. Full rebuild until the backfill ends."},
-  {k:"fact", name:"gold.fact_store_wide_promo", where:"pbi", grain:"one row per <b>deal × store × period seen</b> (no product)", mat:"view", size:"small",
-   cols:"store_key, promotion_id, description, reward_type, discount_rate, deal_price, club_only, items_in_promotion, start_at, end_at, valid_from, valid_to",
-   from:"silver.store_wide_promotions with gold keys (silver already has this grain)"},
+  {k:"fact", name:"gold.fact_promotion_period", where:"dbx", grain:"one row per <b>store × promotion × group × product</b>", mat:"table", size:"~23.5M rows from ~180M daily rows · stays in Databricks",
+   cols:"store_key, product_key, promotion_id, group_id, description, reward_type, min_qty, max_qty, deal_price, deal_unit_price, discount_rate, discount_type, club_code, is_coupon, is_gift_item, allow_multiple_discounts, min_purchase_amount, start_at, end_at, first_seen, last_seen, days_observed, values_changed, source",
+   from:"silver.promotion_obs collapsed to one row per deal. A table because it changes the grain. Never split by values (chains re-encode the same deal daily); values from the last day seen, values_changed flags differences. Check: sum(days_observed) = rows in promotion_obs. Full rebuild for now; later incremental: extend or insert."},
   {k:"mart", name:"gold.mart_eilat_gap", where:"pbi", grain:"one row per <b>chain × date</b> (+ a product-level table for the latest date)", size:"~1k rows + ~55k rows",
    cols:"date, chain, products_compared, median_ratio, share_cheaper_in_eilat, share_pricier, expected_ratio (1/1.18)",
    from:"fact_price_period + dim_store + dim_product: shared barcodes, physical stores only, same chain Eilat vs outside", ex:"SHUFERSAL · 2026-11-15 · 16,618 · 0.847 · …"},
@@ -256,7 +252,7 @@ const T = [
    from:"fact_price_period, a fixed basket of products sold in 8+ chains (10,138 candidates; 3,259 in all 10)"},
   {k:"mart", name:"gold.mart_fake_promos", where:"pbi", grain:"one row per <b>deal × store × product</b>", size:"~a few million rows; Power BI gets an aggregate",
    cols:"chain, store_key, product_key, promotion_id, start_at, deal_unit_price, shelf_price_14d_before, shelf_price_now, is_fake (deal ≥ price 14 days before), club_only",
-   from:"fact_promotion_period + fact_store_wide_promo + fact_price_period"},
+   from:"fact_promotion_period + fact_price_period"},
   {k:"mart", name:"gold.mart_price_moves", where:"pbi", grain:"one row per <b>week × chain × manufacturer</b>", size:"~500k rows",
    cols:"week, chain, manufacturer, products, rises, cuts, median_change_pct, chained_index (2024-10 = 100)",
    from:"fact_price_period, a price rise is the start of a new period with a higher price"},
