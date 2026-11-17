@@ -1,0 +1,241 @@
+item_key,eval_set,name,true_category,round1_category,round1_confidence
+7262626014158,round1_review,בובת רותי מנגנת,toys_stationery_seasonal,toys_stationery_seasonal,0.88
+4033100003530,round1_review,וינסטון סופר סלימס מ,tobacco,tobacco,0.85
+5904277112020,round1_review,קפה נמס גולד 200 גר,coffee_tea,coffee_tea,0.85
+7290014016170,round1_review,"פארינה קמח תופת לל""ג450ג",grains_pasta_legumes,grains_pasta_legumes,0.86
+7290106570023,round1_review,אסם בייגלה שטוחים שו,sweets_snacks,sweets_snacks,0.78
+7290115190915,round1_review,נקסט לבן XL טבק לגלג,tobacco,tobacco,0.87
+7290018755686,round1_review,אסקימו אבטיח,sweets_snacks,soft_drinks,0.85
+7290016867114,round1_review,לחם קל כוסמין מלא 45,bread_bakery,bread_bakery,0.78
+3560231065461,round1_review,כיסא קמפינג מתקפל FO,other_nonfood,other_nonfood,0.65
+7290016272017,round1_review,זיתים ירוקים מנזלינו,prepared_other_food,prepared_other_food,0.65
+MAHSANI_ASHUK_NEW_SOURCE:5103123,round1_review,ג`בטה 180 קפואה,bread_bakery,prepared_other_food,0.55
+7290019308201,round1_review,"מנגו 1ק""ג",fresh_fruit,fresh_fruit,0.92
+4810168062217,round1_review,בלינצ'ס במילוי תפוח עץ וקינמון מוקפאים,prepared_other_food,prepared_other_food,0.72
+8710448641551,round1_review,רוטב צדר מקורי 850 מ,prepared_other_food,prepared_other_food,0.85
+7290107944380,round1_review,אגוזי 45 גרם,sweets_snacks,sweets_snacks,0.65
+3560239694557,round1_review,קולפן 3 להבים,personal_care,personal_care,0.65
+7290119054084,round1_review,עוגיות סבלה שקדים חל,sweets_snacks,sweets_snacks,0.78
+7290000311845,round1_review,עוגיות חיטה ללא סוכר,sweets_snacks,sweets_snacks,0.88
+7290121290586,round1_review,אל.די סלימס פאקט 10,tobacco,cleaning_laundry,0.78
+7290017928463,round1_review,מאיר בייגלסמאש שברי,bread_bakery,bread_bakery,0.75
+7290002657866,round1_review,פילה אמנון בדץ,fish,fish,0.6
+6920220000717,round1_review,קישוט פפיון במגוון צ,toys_stationery_seasonal,bread_bakery,0.55
+VICTORY_NEW_SOURCE:1319369,round1_review,בשר  מס`10 צוואר חלק,meat_poultry,meat_poultry,0.94
+7290017946399,round1_review,סוד מרכך מרוכז ארומה,cleaning_laundry,cleaning_laundry,0.85
+7290018556863,round1_review,ערק הזקן בטעם לימון,alcohol,alcohol,0.93
+7290119772681,round1_review,מארז שוופס לימון ליי,soft_drinks,soft_drinks,0.78
+7290116851372,round1_review,כף אשפה קטן,home_kitchen,home_kitchen,0.6
+7296021141850,round1_review,פורס ביצים יחיד,home_kitchen,dairy_eggs,0.88
+5902510275396,round1_review,ממרח בטעם כבד עוף עדין 130 גר GURMANOFF,prepared_other_food,prepared_other_food,0.75
+7290008807326,round1_review,ליקר אמרטו,alcohol,alcohol,0.85
+7290118879398,round1_review,מרשמלו מסולסל ארוך -,sweets_snacks,sweets_snacks,0.93
+7290104859854,round1_review,טישו דו שכבתי לפיד 5,paper_disposables,paper_disposables,0.92
+8006540822944,round1_review,אולוויז תחבושות וליו,personal_care,health_pharma,0.85
+7290103700041,round1_review,טאצ`מטליות רב שימושיות מארז תשיעייה,cleaning_laundry,cleaning_laundry,0.78
+7290011473372,round1_review,אבקת חרובים אורגנית,prepared_other_food,grains_pasta_legumes,0.65
+7290121161886,round1_review,טודיי חטיף חלבון בטעם בננה שוקולד צ'יפס,sweets_snacks,sweets_snacks,0.74
+7290000805368,round1_review,"בונזו גורים 3 ק""ג",pet,pet,0.85
+7290000001067,round1_review,זית ירוק ושום במשקל,prepared_other_food,prepared_other_food,0.55
+8711842247267,round1_review,גאודה NIJLAND CARAMELLO במשקל,dairy_eggs,sweets_snacks,0.75
+8008857114484,round1_review,פסטה רגיה ללא גלוטן,grains_pasta_legumes,grains_pasta_legumes,0.85
+5999143906070,round1_review,מעבד מזון BH9440,home_kitchen,home_kitchen,0.84
+4904230042358,round1_review,"וויסקי סופר ניקה 700 מ""ל",alcohol,alcohol,0.92
+7290017487151,round1_review,נבטי אלפלפא שדות בעמ,fresh_vegetables,fresh_vegetables,0.85
+7290005287206,round1_review,טונה סטארקיסט רביעיו,fish,fish,0.75
+6911241022369,round1_review,קישוט עץ אדום-זהב 6,toys_stationery_seasonal,toys_stationery_seasonal,
+8445291362178,round1_review,קפסולות סטארבקס האוס,coffee_tea,coffee_tea,0.78
+7290013994813,round1_review,שעועית שחורה אורגני 500 גרם הרדוף,grains_pasta_legumes,grains_pasta_legumes,0.93
+3800200450981,round1_review,טוסט קרים ציז 70 גרם,bread_bakery,bread_bakery,0.78
+8006530264495,round1_review,פמפרס בייבי דריי מיד,baby_care,baby_care,0.86
+7296073722717,round1_review,נייר טואלט לח 3*40י XPO,paper_disposables,paper_disposables,0.93
+8718951593190,round1_review,פלמוליב סבון גוף סמו,personal_care,personal_care,0.85
+7290000999692,round1_review,צנון,fresh_vegetables,fresh_vegetables,0.85
+198296998566,round1_review,חולצת TOMMY,other_nonfood,other_nonfood,0.78
+7290011131517,round1_review,מנת נודלס בטעם תירס,prepared_other_food,prepared_other_food,0.72
+4607001416562,round1_review,טארטלטים במילוי שוקולד קרמל בוטנים 240 ג,sweets_snacks,sweets_snacks,0.78
+MAHSANI_ASHUK_NEW_SOURCE:70177077693,round1_review,א. גריי אינגליש ברקפסט,coffee_tea,coffee_tea,0.78
+7290002331124,round1_review,מים נביעות פלוס בטעם,soft_drinks,soft_drinks,0.78
+8016744807296,round1_review,"שמפו קולור סייף הרבטינט 260 מ""ל",personal_care,personal_care,0.85
+7290016898620,round1_review,ספוגית לטש מבריק הקסם*3,cleaning_laundry,cleaning_laundry,0.85
+7290121161268,round1_review,משחת שיניים פסים מרעננים ג'ל,personal_care,personal_care,0.85
+7290006296122,round1_review,אגם 10 מל - עשבי קדם,AMBIGUOUS,prepared_other_food,0.78
+6291108328750,round1_review,בראקאת אקווה יוניסקס100מ,personal_care,personal_care,0.65
+7290012894572,round1_review,שום קצוץ קפוא דורות,prepared_other_food,prepared_other_food,0.78
+6923861104387,round1_review,סט סוללות כפתור+,home_kitchen,other_nonfood,0.78
+7290001193167,round1_review,קרטונית עם  גב- נגרין/ סל  קש/ליצן,toys_stationery_seasonal,other_nonfood,0.78
+7290017688053,round1_review,כדורי שוקולד 350 גר,sweets_snacks,sweets_snacks,0.88
+VICTORY_NEW_SOURCE:355917,round1_review,לחמניה כריך ח.מלאה בונז`ור,bread_bakery,bread_bakery,0.85
+7290019603351,round1_review,כמון מיה 80 גרם,prepared_other_food,home_kitchen,0.4
+7290020498380,round1_review,מלפפון בחומץ בינוניי,prepared_other_food,prepared_other_food,0.7
+7290012343018,round1_review,ג.סולוגוני 18%,dairy_eggs,prepared_other_food,0.55
+7290020329578,round1_review,יין קדמון אדום מתוק,alcohol,alcohol,0.95
+3600523193158,round1_review,תרסיס לכיסוי מיידי של שורשי השיער חום,personal_care,personal_care,0.78
+7290117538005,round1_review,סרום בוסטר ויטמין סי30מל,personal_care,personal_care,0.73
+7290111347832,round1_review,ניקול כפפות ניטריל מידה L,other_nonfood,other_nonfood,0.55
+7290011115258,round1_review,סבון מוצק נקה 7 ירוק,cleaning_laundry,personal_care,0.65
+7290015641128,round1_review,תבנית אלומיניום גסטרונום,home_kitchen,home_kitchen,0.85
+7290002391777,round1_review,"קבב עגל כשל""פ 440 גרם",meat_poultry,meat_poultry,0.9
+7290108357448,round1_review,קרם גוף קרמה לבנדר ואקליפטוס,personal_care,personal_care,0.78
+7290006559593,round1_review,גבינת בופאלו למריחה,dairy_eggs,dairy_eggs,0.88
+5054563219534,round1_review,סנסוד פ.ילד0-6,personal_care,baby_food,0.78
+40232885518,round1_review,אוכמניות 125 גרם,fresh_fruit,fresh_fruit,0.85
+7290018724804,round1_review,זרעי ציה נטורלה,grains_pasta_legumes,grains_pasta_legumes,0.68
+5012909006156,round1_review,מברשת בקבוקים פיליפס אוונט,baby_care,baby_care,0.78
+7290003359783,round1_review,קציצה טעם מרוקאי 500,prepared_other_food,prepared_other_food,0.65
+7290107280129,round1_review,סנו סושי 20 שקיות אש,paper_disposables,prepared_other_food,0.78
+192333255124,round1_review,"מייקאפ ויטמין 215 30מ""""ל",personal_care,personal_care,0.88
+7290003220403,round1_review,קרקר מעדני המלך,sweets_snacks,sweets_snacks,0.78
+8690572783931,round1_review,דאודורנט פה ספריי - אינביזיבל פאוור לגבר,personal_care,personal_care,0.88
+7290017218007,round1_review,פרוביוטיק שייפ 30 כמוסות,health_pharma,health_pharma,0.85
+4840709002440,round1_review,ברנדי קווינט כשר 500,alcohol,alcohol,0.92
+309970175153,round1_review,שפתון מאט לייט קראיון009,personal_care,personal_care,0.92
+7290122780079,round1_review,במבה מאנצ' בטעם צ'דר,sweets_snacks,sweets_snacks,0.78
+25675301092,round1_review,סוכריות גומי חמצוצים,sweets_snacks,sweets_snacks,0.88
+8000350008376,round1_review,מבחר עוגיות בטעמים ש,sweets_snacks,sweets_snacks,0.78
+7290109923765,round1_review,ניקוי אסלה WC MAXI זוג 110גר,cleaning_laundry,cleaning_laundry,0.93
+5900951307249,round1_review,M&M's בוטנים 45 גרם,sweets_snacks,sweets_snacks,0.85
+8000215204554,round1_review,משקה אורז עם קוקוס אורגני,dairy_eggs,soft_drinks,0.78
+5035766044673,round1_review,משקה סיידר תפוחים אל,soft_drinks,soft_drinks,0.65
+8006545105691,round1_review,נרות נקודות/פסים/כוכ,toys_stationery_seasonal,other_nonfood,0.55
+3574661610375,round1_review,ניוטרוג'ינה קרם לחות מרגיע וקליל,personal_care,personal_care,0.85
+7290018443057,round1_review,נבטי חמניה  (תקומה),fresh_vegetables,fresh_vegetables,0.85
+7290018556948,round1_review,ארק בן חיים 40% 700,alcohol,alcohol,0.85
+7290112490674,round1_review,קונפיטורת דובדבנים 7,sweets_snacks,prepared_other_food,0.68
+7290019481997,round1_review,נרות חנוכה ציבעוניים,toys_stationery_seasonal,toys_stationery_seasonal,0.65
+7290119860951,round1_review,סוכריות ללתס טעם מנטה 75 גר,sweets_snacks,sweets_snacks,0.93
+8710103875666,round1_review,"בקבוק אוונט נטורל 2  125מ""ל",baby_care,soft_drinks,0.78
+7262626088739,round1_review,משקפי קריאה,other_nonfood,other_nonfood,0.7
+7290000913094,round1_review,לב הכתף בקר קפוא חלק,meat_poultry,meat_poultry,0.92
+8022836001237,round1_review,"פיצולטו קברנה סוביניון אורגני 750 מ""ל",alcohol,alcohol,0.85
+6985462458139,round1_review,אוזניות בלוטוס TWS דגם I12,other_nonfood,other_nonfood,0.85
+7290014152588,round1_review,יין מדמואזל רוזה יבש,alcohol,alcohol,0.92
+3361618,round1_review,פילה סלמון שלם טרי,fish,fish,0.92
+6290360379012,round1_review,"בלו מגישן אדפ 100מ""ל",personal_care,personal_care,0.75
+7297046141061,round1_review,אוריאל מגן ברך לבן 45XL,other_nonfood,other_nonfood,0.65
+7290013906281,round1_review,נקניקיות טירת צבי 1,meat_poultry,meat_poultry,0.82
+7290120090149,round1_review,גומי בקבוק קולה קטן,sweets_snacks,sweets_snacks,0.82
+7777555509045,round1_review,קערת מסננת נירוסטה,home_kitchen,home_kitchen,0.85
+7290001532065,round1_review,טונה מעושן חם הרמס ב,fish,fish,0.8
+7290016564266,round1_review,כיסוי הפלא 30 יח מבריקל,other_nonfood,other_nonfood,0.55
+7290001246528,round1_review,מרכך כביסה מרוכז פרפ,cleaning_laundry,cleaning_laundry,0.93
+7290013215093,new_blind,פטריות מלך היער ארוז,fresh_vegetables,,
+7290101110095,new_blind,קרחון קולה גלידות פלדמן,sweets_snacks,,
+7290116936475,new_blind,"יופלה דיאט עם פירות הדר 150 גרם בד""צ ועדת מהדרין",dairy_eggs,,
+7290005593352,new_blind,שמן סויה 1ליטר מזוכך.,oils_fats,,
+7290119500178,new_blind,XXL שקיות אשפה לפח ענק 50 יח גלילונית,paper_disposables,,
+7290000134871,new_blind,מיכל גדול פלפל שחור טחון 100 גרם,prepared_other_food,,
+8700216421928,new_blind,"פנטן קונדישנר לחות מוגברת  600מ""ל",personal_care,,
+7290019857129,new_blind,פרמיו שימורי מזון משלים לחתלתול עם סלמון במרקם פטה,pet,,
+8718951509627,new_blind,"משחת שיניים אופטיק וויט לאוהבי קפה,תה ולמעשנים",personal_care,,
+7290001045169,new_blind,מיץ תפוחים צלול סחוט פרימור 1 ליטר,soft_drinks,,
+7290117268322,new_blind,"בסיס לפיצה ללא גלוטן EURO כשל""פ 150 גרם",bread_bakery,,
+7290108355253,new_blind,נקה 7 MEN ג'ל רחצה מועשר בתמציות אשכולית ומנטה,personal_care,,
+7290015009362,new_blind,"בלסמי לבן מצומצם 250 מ""ל",prepared_other_food,,
+7290000461625,new_blind,בייגלה שמונה שמונה 400  גר`בייגל בייגל,sweets_snacks,,
+7290100243671,new_blind,מרכך כביסה מרוכז בדים אקסטרה בניחוח יסמין מרענן,cleaning_laundry,,
+7290002105305,new_blind,בשר מס 10 צוואר מחיר,meat_poultry,,
+7290006788375,new_blind,"קרליין דאודורנט נושם+ סטיק PURE ורוד 50 מ""ל",personal_care,,
+7290001865453,new_blind,פמלי לקשרי 1ליטר לבנדר ארומטי+משאבה,personal_care,,
+7290016006346,new_blind,"מי סודה - מארז 6 בקבוקים 500 מ""ל",soft_drinks,,
+7290003751143,new_blind,"גרונות עוף קפוא בד""ץ לקג",meat_poultry,,
+7290020394699,new_blind,"אטריות שעועית ""חמישייה"" 250 גרם ללא גלוטן",grains_pasta_legumes,,
+9771565039149,new_blind,עיתון לאשה יום ד,other_nonfood,,
+7290019947127,new_blind,פאו דה קז'ו זיתים  מאפה גבינה ברזילאי 600 גר,bread_bakery,,
+7290000051772,new_blind,מעדן תנובה שוקולד קו,dairy_eggs,,
+97643082449,new_blind,שוקולד פרלין שמרלינג,sweets_snacks,,
+5412533421958,new_blind,"אקובר תרסיס לניקוי חלונות וזכוכית 500 מ""ל",cleaning_laundry,,
+7290005576089,new_blind,בצל ירוק גלאט עלים - יח,fresh_vegetables,,
+7290111358395,new_blind,מארז מיני ריטר שוקולד חלב כשלפ 150 גרם,sweets_snacks,,
+5201205111279,new_blind,ספוג סופג ריח מקרר מ,cleaning_laundry,,
+7290116538181,new_blind,"מרכך כביסה מרוכז בניחוח אינר גלואו בדין אקסטרה 960 מ""ל",cleaning_laundry,,
+7290108620412,new_blind,"יין שער אריות אדום  Capital 750מ""ל.",alcohol,,
+7290003060023,new_blind,סולת טחנות ישראליות,grains_pasta_legumes,,
+7290011148348,new_blind,חסה לאליק מהדרין יבולי הכפר,fresh_vegetables,,
+5011007003227,new_blind,וויסקי גיימסון 1 ליטר,alcohol,,
+7290006775405,new_blind,מאפינס שוקוצ`יפס 45  גר`אחוה,sweets_snacks,,
+7290004068028,new_blind,"משקה ציזיקי גד 500 מ""ל",dairy_eggs,,
+8593868007127,new_blind,"שישיית בירה סטארופרמן בקבוק 6*330 מ""ל",alcohol,,
+7290004125455,new_blind,שמנת חמוצה אורגינל 15% 200 מל פיקוח תנו,dairy_eggs,,
+8006040380258,new_blind,משקה שיבולת שועל בריסטה  ווסויה,dairy_eggs,,
+7290019075684,new_blind,קידס מולטי ויטמין שמפו ומרכך 1 ליטר,personal_care,,
+7290017058825,new_blind,תרסיס שמן קנולה 142 גרם,oils_fats,,
+7296049025903,new_blind,כוס קידוש זכוכית+תחתית לקיטשן,home_kitchen,,
+8693495036498,new_blind,"פלמוליב סבון רחצה לגבר 4 ב-1 המפ 750 מ""ל",personal_care,,
+7290116535807,new_blind,"פינוק  GLOW מרכך לשיער ארוך 410מ""ל",personal_care,,
+8700216593656,new_blind,הד שולדרס שמפו בניחוח תפוח 625 מל,personal_care,,
+7290002692775,new_blind,"תרסיס קנולה בטעם חמאה עץ הזית 200 מ""ל",oils_fats,,
+7290000311210,new_blind,וופלים מן טעם לימון 200 גר'נ.ל.פ,sweets_snacks,,
+7290015193573,new_blind,מקלוני אורז עובי 2 ממ 400 גרם,grains_pasta_legumes,,
+7290112335111,new_blind,מסטיק מאסט ביג קוביות בטעם בזוקה 86 גר`,sweets_snacks,,
+7290006511706,new_blind,גבינת גאודה עם כמון שקיל,dairy_eggs,,
+7290011498580,new_blind,מרציפן אורגני 200 גר שקד תבור,sweets_snacks,,
+7290005854606,new_blind,אסקימו אננס גלידות שטראוס,sweets_snacks,,
+7290016566185,new_blind,"בקבוק שתיה 550 מ""ל.",home_kitchen,,
+7290006739407,new_blind,שניצל תירס לייט 98 קלוריות זוגלובק טבע 630 גרם,prepared_other_food,,
+7290013153395,new_blind,מיץ סחוט רימונים טבעי פריגת (1 ליטר),soft_drinks,,
+8445291028920,new_blind,מחית תפוח עץ ובננה 190 גר כשלפ מטרנה אס,baby_food,,
+7290010757909,new_blind,בורקס גבינה ללא גלוטן 500 גר מאפיית אריא,bread_bakery,,
+7290018593059,new_blind,אגוזנו פתיתי אגוזים ושקים בסגנון פרמזן פ,prepared_other_food,,
+4002590000039,new_blind,קלפני סוכריות קשות בטעם פירות הדר בפחית,sweets_snacks,,
+7290002771333,new_blind,קפסולות קפה בלי הל - מארז 10 יח',coffee_tea,,
+7290000922132,new_blind,סבון הוואי קוקוס 33%,AMBIGUOUS,,
+7290020543073,new_blind,ביף גרקי בטעם שווארמה 60 גרם,meat_poultry,,
+7290017068558,new_blind,שקד טחון מיה 300 גרם,prepared_other_food,,
+7290017012155,new_blind,סבוקלם פרו אייג ק.עיניים,personal_care,,
+4067897475317,new_blind,אדידס יבואן רשמי,AMBIGUOUS,,
+7290001751886,new_blind,פילדלפיה גריל משקל,dairy_eggs,,
+MAHSANI_ASHUK_NEW_SOURCE:37600311571,new_blind,חמאת בוטנים סקיפי ללא תוספת סוכר 340גר,prepared_other_food,,
+7290016898293,new_blind,מגש לאירוח אובלי קטן,home_kitchen,,
+MAHSANI_ASHUK_NEW_SOURCE:1274279,new_blind,גלית תות חלבי 48ג,dairy_eggs,,
+KESHET:135,new_blind,חבוש,fresh_fruit,,
+7290019138051,new_blind,צמד מעודנת עם פפריקה,meat_poultry,,
+7290121045759,new_blind,צלחת פלסטיק פרימיום - LOL #,paper_disposables,,
+7290018949511,new_blind,מיץ אורגני תפוח אננס 750 מל גרופר,soft_drinks,,
+8018068031395,new_blind,מארז נסקוטש 6 יח אול,AMBIGUOUS,,
+701980285288,new_blind,מיונז חריף אש 210 גרם,prepared_other_food,,
+877300005185,new_blind,"פלפל שאטה טחון 1 ק""ג",prepared_other_food,,
+3030050181081,new_blind,בייביליסט מחליק ST493Eיח,home_kitchen,,
+7290001158548,new_blind,ירכי עוף טרי תפזורת עצמי,meat_poultry,,
+7290122889444,new_blind,רביעיית כסאות מרופדים דגם סהרה - גרז',home_kitchen,,
+7297449952080,new_blind,סט פיגמה מיני מי הלו קיטי,other_nonfood,,
+4600508727438,new_blind,וופלים ממולא בטעם לימון 75 גר קורובקה,sweets_snacks,,
+7290119040858,new_blind,עוגיות מקלות עלים 500 גר,sweets_snacks,,
+4820074820351,new_blind,שיבולת שועל 1 קג,grains_pasta_legumes,,
+7290015008846,new_blind,קעריות אובלי עבות 25 יח,paper_disposables,,
+7290022005364,new_blind,תערובת כדורי שוקולד רמי לוי 560 גרם,grains_pasta_legumes,,
+733619601220,new_blind,עגול שחור מגירה פפיו,AMBIGUOUS,,
+7290009955019,new_blind,משקה מצונן 1.5 ליטר,soft_drinks,,
+7290006390806,new_blind,חצי ג'בטה,bread_bakery,,
+6942423974312,new_blind,סט 6 כפיות במארז קופ,home_kitchen,,
+7860001964151,new_blind,מטריות לקוקטייל,toys_stationery_seasonal,,
+4607039510287,new_blind,קונפיטורה לינגונברי,sweets_snacks,,
+KESHET:16110,new_blind,אגרול סיני,prepared_other_food,,
+7290006214102,new_blind,חומוס טחון גונדי במשקל,grains_pasta_legumes,,
+7290006337078,new_blind,פלמני מגשים רוציניי  800 גרם,prepared_other_food,,
+7290016045055,new_blind,"יין זינפנדל צפרירים 750 מ""ל",alcohol,,
+7290017883342,new_blind,סוכריות קופצות ענבים 12י,sweets_snacks,,
+4607064929139,new_blind,שימורי סלט ירקות 460 גר,prepared_other_food,,
+7290012475917,new_blind,עוגיות כוסמת עם קוקוס 250  גר`אורגני ללא,sweets_snacks,,
+7290113867437,new_blind,דבש 500 גרם מחנה  יהודה*,sweets_snacks,,
+7290015801942,new_blind,פלחי לימון כבוש 900ג,prepared_other_food,,
+7290005699498,new_blind,בשר מס 8 חלק,meat_poultry,,
+7297449956361,new_blind,קפוצון רוכסן בנים,other_nonfood,,
+7290019965756,new_blind,טפטפים + חיזוקית פרו 60 יחידות,AMBIGUOUS,,
+719565476341,new_blind,נסיכות 4סבון לרחצה ומשחק,personal_care,,
+7290118432746,new_blind,צלחות סחלבים יוקרתיות גדולות לבן וכסף- אר' 10,paper_disposables,,
+7290114788571,new_blind,כסא גיימינג עם הדום שחור,home_kitchen,,
+8595012061061,new_blind,תערובת תיבול לדגים 2,prepared_other_food,,
+4008600284918,new_blind,זוג מוצצים מיקי מאוס שחור 0-6 חודשים,baby_care,,
+7290011524227,new_blind,פסטה ברוטב פטריות מו,prepared_other_food,,
+7290017687377,new_blind,תיק רמי לוי בשכונה,other_nonfood,,
+7290019444367,new_blind,גאמיס קולגן אלטמן 90 כמוסות,health_pharma,,
+7296073747963,new_blind,קוקטיל פירות4*113ב.יהודה,prepared_other_food,,
+7290012384080,new_blind,לחם דגנים בחוש 400 גרם,bread_bakery,,
+MAHSANI_ASHUK_NEW_SOURCE:15,new_blind,משלוח לשדה בוקר,other_nonfood,,
+7290001436868,new_blind,סטייק אנטריקוט טרי חלק,meat_poultry,,
+8697659244385,new_blind,אסותא מילוי מטהר אוויר בניחוח ורדים,cleaning_laundry,,
+6295124042577,new_blind,מרקיזה מספר2אדפ גבר100מל,personal_care,,
+7290001680308,new_blind,*מבצע* גרנולה,grains_pasta_legumes,,
+7290100334041,new_blind,שוארמה הודו נ.טרי תפזורת,meat_poultry,,
+181,new_blind,שסק ארוז 330 גרם,fresh_fruit,,
