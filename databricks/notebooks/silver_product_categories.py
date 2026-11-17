@@ -7,6 +7,7 @@ import json, time
 
 dbutils.widgets.text("mode", "pilot")
 dbutils.widgets.text("sample_size", "1000")
+dbutils.widgets.text("job_run_id", "")  # the bundle passes {{job.run_id}}, so the run can be found in system.billing.usage
 mode = dbutils.widgets.get("mode")
 sample_size = int(dbutils.widgets.get("sample_size"))
 assert mode == "pilot", f"only mode 'pilot' is implemented, got {mode!r}"
@@ -124,6 +125,7 @@ SELECT count(*), count(error_message), count_if(category IS NULL), count_if(cate
 FROM workspace.silver.product_categories_pilot""").first()
 print(f"pilot rows {n}, with error_message {errs}, category NULL {nulls}, category not in label list {bad}")
 assert n > 0, "pilot table is empty"
-ctx = dbutils.notebook.entry_point.getDbutils().notebook().getContext()
-print("job run id:", ctx.currentRunId().get().id() if ctx.currentRunId().isDefined() else None,
-      "| classification s:", round(elapsed, 1))
+run_id = dbutils.widgets.get("job_run_id")
+print("job run id:", run_id, "| classification s:", round(elapsed, 1))
+# the result is also the notebook output, so a caller can read it from the Jobs API
+dbutils.notebook.exit(json.dumps({"job_run_id": run_id, "rows": n, "errors": errs, "seconds": round(elapsed, 1)}))

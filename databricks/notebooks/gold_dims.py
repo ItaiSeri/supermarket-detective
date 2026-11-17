@@ -1,9 +1,10 @@
 # Databricks notebook source
 # Gold dimensions (milestone 4, step G1). Marts read only the star (docs/architecture.html, gold layer section).
-# This notebook holds the dimensions: dim_date now; dim_store and dim_product are added in later steps.
+# This notebook holds the dimensions: dim_date and dim_product now; dim_store is added in a later step.
 #
-#   dim_date  TABLE  one row per day, 2024-09-01 .. 2027-12-31, holidays from a seed file,
-#                    plus how many chains have prices on each day (the reason it is rebuilt every run)
+#   dim_date     TABLE  one row per day, 2024-09-01 .. 2027-12-31, holidays from a seed file,
+#                       plus how many chains have prices on each day (the reason it is rebuilt every run)
+#   dim_product  TABLE  one row per product (silver.items) + category columns from silver.product_categories
 
 spark.sql("CREATE SCHEMA IF NOT EXISTS workspace.gold")
 
@@ -111,3 +112,65 @@ assert n == 1217, f"dim_date should have 1217 rows (2024-09-01 .. 2027-12-31), h
 tuesday = spark.sql("SELECT weekday FROM workspace.gold.dim_date WHERE date = DATE'2026-11-17'").first()[0]
 assert tuesday == 3, f"2026-11-17 is a Tuesday and should be 3, got {tuesday}"
 print(f"dim_date: {n} rows, {lo} .. {hi}")
+
+# COMMAND ----------
+
+# silver.product_categories is the FINAL category table. G1e fills it (rules + ai_classify on active products);
+# until then it is created empty so dim_product can already join it and its category columns are NULL.
+# The pilot table (silver.product_categories_pilot) is deliberately NOT joined here.
+spark.sql("""
+CREATE TABLE IF NOT EXISTS workspace.silver.product_categories (
+  item_key STRING,
+  category STRING,
+  category_group STRING,
+  is_food BOOLEAN,
+  confidence DOUBLE,
+  source STRING
+)
+COMMENT 'Final product categories, one row per item_key. Empty until G1e. source = rule, ai_classify or manual.'
+""")
+
+# COMMAND ----------
+
+# dim_product: one row per item_key of silver.items (item_key is the product key; the rule lives in
+# silver.item_key). chain is NULL for shared products (silver already does that). is_active = seen within
+# 14 days of the newest last_seen in the table, so the flag means "still on the shelves", not "ever seen".
+# Category columns come from silver.product_categories by LEFT JOIN: NULL until G1e fills it.
+spark.sql("""
+CREATE OR REPLACE TABLE workspace.gold.dim_product
+CLUSTER BY (product_key)
+COMMENT 'One row per product (silver.items): shared barcode or chain:code. Category columns are NULL until G1e fills silver.product_categories.'
+AS
+SELECT
+  i.item_key                       AS product_key,
+  i.item_scope,
+  i.item_code,
+  i.chain,
+  i.item_name                      AS product_name,
+  i.manufacturer_name              AS manufacturer,
+  i.manufacture_country            AS country,
+  i.quantity,
+  i.unit_qty,
+  i.unit_of_measure,
+  i.is_weighted,
+  i.chains_count,
+  i.first_seen,
+  i.last_seen,
+  i.last_seen >= date_sub(max(i.last_seen) OVER (), 14) AS is_active,
+  c.category,
+  c.category_group,
+  c.is_food,
+  c.confidence                     AS category_confidence,
+  c.source                         AS category_source
+FROM workspace.silver.items i
+LEFT JOIN workspace.silver.product_categories c ON c.item_key = i.item_key
+""")
+
+# COMMAND ----------
+
+n_items = spark.sql("SELECT count(*) FROM workspace.silver.items").first()[0]
+n, distinct_n, active = spark.sql(
+    "SELECT count(*), count(DISTINCT product_key), count_if(is_active) FROM workspace.gold.dim_product").first()
+assert n == n_items, f"dim_product has {n} rows, silver.items has {n_items}"
+assert n == distinct_n, f"dim_product has repeated product_key: {n} rows, {distinct_n} distinct"
+print(f"dim_product: {n} rows, {active} active")

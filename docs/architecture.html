@@ -648,9 +648,8 @@ a:focus-visible { outline: 2px solid var(--daily); outline-offset: 2px; }
   <h2>Sequence</h2>
   <ol class="steps">
     <li><b>G0 ✓</b> facts in <code>gold_facts.py</code>, job <code>gold_load</code> after silver in <code>daily_load</code>: view <code>fact_price_period</code> (keys + renames over silver); table <code>fact_promotion_period</code> (full rebuild for now, then incremental: extend or insert). Product key rule is one SQL function, <code>silver.item_key</code>.</li>
-    <li><b>G1</b> dimensions: <code>dim_store</code> (with a city table from the CBS locality codes), <code>dim_product</code>, <code>dim_date</code> with Hanukkah and other holidays.</li>
+    <li><b>G1</b> dimensions: <code>dim_store</code> (with a city table from the CBS locality codes), <code>dim_product</code>, <code>dim_date</code> with Hanukkah and other holidays. Product categories are now part of G1 (G1e: rules + <code>ai_classify</code> on active products, filled into <code>dim_product</code>); the pilot of 1,000 products is done (G1c).</li>
     <li><b>G2</b> <code>mart_eilat_gap</code>, plus the Carrefour check.</li>
-    <li><b>G2b</b> product categories (D5): rules + <code>ai_classify</code> in silver, filled into <code>dim_product</code>.</li>
     <li><b>G3</b> Power BI v1: one page on the Eilat question, Import mode from the SQL warehouse. Then the first X post.</li>
     <li><b>G4</b> <code>mart_basket_index</code>: cheapest chain by city.</li>
     <li><b>G5</b> <code>mart_fake_promos</code> and <code>mart_price_moves</code>.</li>
@@ -753,8 +752,8 @@ const T = [
    cols:"store_key, chain, chain_name_he, sub_chain, store_id, store_name, city_code, <code>city_name</code>, <code>district</code>, is_physical, is_eilat, store_type",
    from:"silver.stores + a CBS locality-code table (D6). City field by chain: 6 chains publish a numeric code, Victory and Mahsani Ashuk a Hebrew name, Yohananof and most Keshet stores 0"},
   {k:"dim", name:"gold.dim_product", where:"pbi", grain:"one row per <b>item_key</b> (shared barcode, or chain:code)", size:"~325k rows (Power BI gets only the products used in marts)",
-   cols:"product_key, item_key, scope, name, manufacturer, country, quantity, unit, is_weighted, chains_count, <code>category</code>, <code>is_private_label</code>",
-   from:"silver.items + category enrichment (see D5)"},
+   cols:"product_key, item_scope, item_code, chain, product_name, manufacturer, country, quantity, unit_qty, unit_of_measure, is_weighted, chains_count, first_seen, last_seen, is_active, <code>category</code>, <code>category_group</code>, <code>is_food</code>, <code>category_confidence</code>, <code>category_source</code>",
+   from:"silver.items + a LEFT JOIN to silver.product_categories (created empty, filled in G1e; the category columns are NULL until then, see D5). is_active = seen within 14 days of the newest last_seen. Built (G1c).", built:true},
   {k:"dim", name:"gold.dim_date", where:"pbi", grain:"one row per <b>day</b>, September 1st, 2024 → December 31st, 2027", size:"1,217 rows",
    cols:"date, year, month, month_name, day_of_month, weekday (1 = Sunday), weekday_name, is_weekend, week_start, holiday_name, is_holiday, is_hanukkah, next_holiday_name, days_to_next_holiday, hanukkah_year, days_from_hanukkah_start, chains_with_prices, data_coverage (full / partial / none)",
    from:"generated one row per day + a holiday seed file (holidays.csv, start = the eve of the holiday). Rebuilt in every run, because chains_with_prices counts the chains with price rows on each day in silver.price_obs. Built (G1a).", built:true},
@@ -822,7 +821,7 @@ const D = [
   ["What counts as the same product across chains?", "Accepted", "<b>Shared barcodes only</b> for comparisons across chains. Chain-only codes are still fine inside one chain."],
   ["Shelf price or deal price?", "Accepted", "<b>Shelf price first</b>, deals in their own marts. Mixing them muddies a clean VAT or basket story."],
   ["What goes to Power BI?", "Accepted", "<b>Only the marts and the dimensions they use</b>, in Import mode. The 110.7M-row fact stays in Databricks for SQL and Genie. In production you might use DirectQuery or a semantic layer; on Free Edition, Import is simpler and fast."],
-  ["Product categories: the data has none. How to add them?", "Accepted, in scope", "<b>Built after G2, in silver.</b> Categories follow the CBS consumer price index groups. Keyword rules first, then Databricks' <code>ai_classify</code> (tested on Free Edition, in Hebrew) for the rest, in a task that classifies only new products; manual overrides win. Accuracy is measured on 300 products labelled by Claude, 30 of them spot-checked by Itai."],
+  ["Product categories: the data has none. How to add them?", "Accepted, in scope", "<b>Built in G1, in silver</b> (moved from after G2 by Itai on November 17th, 2026). 24 labels follow the CBS consumer price index groups; a pilot of 1,000 products comes first. Keyword rules first, then Databricks' <code>ai_classify</code> (tested on Free Edition, in Hebrew) for the rest, in a task that classifies only new products; manual overrides win. Accuracy is measured on 300 products labelled by Claude, 30 of them spot-checked by Itai."],
   ["City names: most chains publish a code, not a name.", "Accepted", "<b>Load the CBS locality-code table</b> (a public CSV) as a small reference table. Codes become names and districts in <code>dim_store</code>."],
   ["Gold refresh: when and how?", "Accepted, built in G0", "<b>Job <code>gold_load</code> after silver in <code>daily_load</code></b>; it runs only if silver succeeded. Marts are rebuilt in full each day (they're small); <code>fact_promotion_period</code> becomes incremental (extend or insert) later."],
 ];

@@ -460,6 +460,14 @@ Managed Delta table, written by `databricks/notebooks/silver_dq.py` (job `silver
 
 **Promotion checks.** They use the newest `file_date` in `promotion_obs`. `promotion_repeated_keys` (key `chain` + `store_id` + `promotion_id` + `group_id` + `item_code`, FAIL above 0); `promotion_reject_percent` is `promotion_quarantine` rows over kept plus rejected rows of that day (WARNING above 0.1, FAIL above 5, the same limits as for prices; 3 of 11.3 million rows on 2026-11-10); `promotion_expired_percent` is rows whose `end_at` is before the file date (0 on 2026-11-10, 104 rows or 0.001% on 2026-11-09), WARNING above 0.1 and never FAIL, since a chain may keep an ended promotion in the file. `store_wide_promotions_latest` is the most distinct store-wide promotions any chain had on that day (WARNING above 20, never FAIL).
 
+### Silver tables: `workspace.silver.product_categories` and `product_categories_pilot`
+
+`silver.product_categories` is the final category table: one row per `item_key` (`category`, `category_group`, `is_food`, `confidence`, `source`). It is created empty by `gold_dims.py` and filled in step G1e (rules plus `ai_classify` on active products), so `gold.dim_product` already joins it and its category columns are NULL until then.
+
+`silver.product_categories_pilot` is a pilot, overwritten on every run of the job `classify_products` (notebook `silver_product_categories.py`, parameters `mode` = `pilot`, `sample_size` = 1000; not part of `daily_load`). It holds 1,000 active products (last seen within 14 days of the newest `last_seen`): 500 in 3 or more chains (`multi_chain`) and 500 in fewer (`other`), picked by a hash of `item_key` so a rerun picks the same ones. Input text: name, then the manufacturer unless empty or a placeholder, then quantity and unit. Columns: `item_key`, `stratum`, `input_text`, `category`, `confidence`, `category_group`, `is_food`, `error_message`, `raw_result`, `model_version`, `classified_at`. `ai_classify` (version 2.1, with confidence scores) returns a VARIANT, so the result is written to a table, never a view. The 24 labels (Hebrew descriptions are in the notebook), by group: `food`: `bread_bakery`, `grains_pasta_legumes`, `meat_poultry`, `fish`, `dairy_eggs`, `oils_fats`, `sweets_snacks`, `coffee_tea`, `soft_drinks`, `alcohol`, `prepared_other_food`, `baby_food`; `fresh_produce`: `fresh_fruit`, `fresh_vegetables`; `nonfood`: `baby_care`, `cleaning_laundry`, `paper_disposables`, `personal_care`, `health_pharma`, `pet`, `home_kitchen`, `toys_stationery_seasonal`, `tobacco`, `other_nonfood`. `is_food` is true for `food` and `fresh_produce`.
+
+Run on November 17th, 2026: 1,000 rows, 0 errors, the classification statement took 223 s (job run 704827695797905; check the cost later in `system.billing.usage`, which lags hours). Confidence has 34 distinct values (0.35 to 0.96, median 0.78); 5 rows have a NULL score, all `toys_stationery_seasonal`. Accuracy has not been judged yet.
+
 ## Gold: the star (milestone 4)
 
 Design, lineage and the questions it answers: the "Gold layer design" section of `docs/architecture.html` (claude.ai/artifact/6fuqxaVS7aWoaqWakoTAUV). Built by `databricks/notebooks/gold_facts.py` (facts) and `gold_dims.py` (dimensions), job `gold_load` (tasks `build_facts`, `build_dims`, `log_run`; the two builds are independent), which `daily_load` starts after `silver_load` succeeds, so a DQ FAIL in silver stops gold. Rule: a fact is a stored table only when building it changes the grain; otherwise it is a view over silver. Marts read only the star.
@@ -505,6 +513,24 @@ Managed Delta table, rebuilt in full by `gold_dims.py` (task `build_dims`) in ev
 **Holiday seed.** `databricks/seed/holidays.csv` (committed) is made on the laptop by `databricks/seed/make_holidays.py`, which computes the dates with the Hebrew-calendar library `convertdate` and cross-checks every date against `hdate` and `holidays` (Israel); it exits with an error on any disagreement. Databricks only reads the CSV: the bundle syncs `seed/` next to the notebooks and `gold_dims.py` reads `../seed/holidays.csv`. Columns: `holiday_name` (`rosh_hashana`, `yom_kippur`, `sukkot`, `hanukkah`, `purim`, `passover`, `independence_day`, `shavuot`), `holiday_name_he`, `holiday_year` (the Gregorian year of `start_date`), `start_date`, `end_date`. **Eve rule:** `start_date` is the EVE, the date whose evening the holiday begins, because shoppers buy before; `end_date` is the last day. Sukkot runs through Simchat Torah (22 Tishri in Israel), Passover is all 7 days, Purim is the 14th of Adar (Adar II in a leap year, Shushan Purim not included), and for Independence Day the start is Memorial Day (the observed day moves: from Friday or Saturday to Thursday, from Monday to Tuesday) and the end is the observed day. Hanukkah spans: December 25th, 2024 to January 2nd, 2025; December 14th to 22nd, 2025; December 4th to 12th, 2026; December 24th, 2027 to January 1st, 2028. The seed covers every holiday that touches the table's date range; to extend the range, change the years in the script, run it and commit the CSV.
 
 Checked 2026-11-17: 1,217 rows and distinct dates; coverage `full` on 171 days (October 21st, 2024 to today), `partial` on 71 (the earliest backfilled days, January 11th, 2025 to November 14th, 2026), `none` on 975 (including all future dates); 116 days fall in the Hanukkah window -21 to +7 (counting all four Hanukkah years).
+
+### Gold table: `workspace.gold.dim_product`
+
+Managed Delta table, clustered by `product_key`, rebuilt in full by `gold_dims.py` (task `build_dims`) in every `gold_load` run. One row per product of `silver.items` (key `product_key`, the same string as `item_key`: the barcode when shared, `CHAIN:code` when chain-scoped). The notebook stops if the row count differs from `silver.items` or `product_key` repeats.
+
+| Column | Type | Meaning |
+|---|---|---|
+| `product_key` | string | The product key (`silver.items.item_key`) |
+| `item_scope`, `item_code` | string | `shared` or `chain`; the code as published |
+| `chain` | string | Only for chain-scoped keys; NULL when shared |
+| `product_name`, `manufacturer`, `country` | string | From `silver.items` (`item_name`, `manufacturer_name`, `manufacture_country`) |
+| `quantity`, `unit_qty`, `unit_of_measure`, `is_weighted` | decimal(12,3), string, string, boolean | Package size, as in silver |
+| `chains_count` | int | Chains that published the product |
+| `first_seen`, `last_seen` | date | First and last file date |
+| `is_active` | boolean | `last_seen` within 14 days of the newest `last_seen` in the table |
+| `category`, `category_group`, `is_food`, `category_confidence`, `category_source` | string, string, boolean, double, string | LEFT JOIN to `silver.product_categories`; all NULL until step G1e fills that table (the pilot table is not joined) |
+
+Checked November 17th, 2026: 324,565 rows (296,607 shared), 127,414 active, 0 with a category.
 
 ## Stores files: what the data looks like
 

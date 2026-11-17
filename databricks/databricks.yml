@@ -191,6 +191,19 @@ resources:
             notebook_path: ./notebooks/ops_run_log.py
             base_parameters:
               job_run_id: "{{job.run_id}}"
+    # Category pilot (G1c): ai_classify on 1,000 products into silver.product_categories_pilot.
+    # Run by hand; not part of daily_load.
+    classify_products:
+      name: classify_products
+      max_concurrent_runs: 1
+      tasks:
+        - task_key: classify
+          notebook_task:
+            notebook_path: ./notebooks/silver_product_categories.py
+            base_parameters:
+              mode: pilot
+              sample_size: "1000"
+              job_run_id: "{{job.run_id}}"
     daily_load:
       name: daily_load
       max_concurrent_runs: 1
