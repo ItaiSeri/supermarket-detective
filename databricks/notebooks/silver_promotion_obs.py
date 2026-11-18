@@ -60,7 +60,9 @@ CREATE TABLE IF NOT EXISTS workspace.silver.store_wide_promotions (
   file_time STRING,
   source STRING,
   source_file STRING,
-  bronze_loaded_at TIMESTAMP
+  bronze_loaded_at TIMESTAMP,
+  store_id_header STRING,
+  store_id_source STRING
 )
 CLUSTER BY (file_date, chain)
 """)
@@ -90,6 +92,14 @@ CREATE TABLE IF NOT EXISTS workspace.silver.promotion_quarantine (
 )
 """)
 
+# store_id comes from the file name (silver_functions.store_id_from_file_name); the header's value is kept next to it.
+# store_id_source: 'file_name', or 'header' when the name had no store part. Older tables get the columns here.
+for _t in ("promotion_obs", "store_wide_promotions"):
+    _cols = {r["col_name"] for r in spark.sql(f"DESCRIBE TABLE workspace.silver.{_t}").collect()}
+    for _c in ("store_id_header", "store_id_source"):
+        if _c not in _cols:
+            spark.sql(f"ALTER TABLE workspace.silver.{_t} ADD COLUMN {_c} STRING")
+
 # COMMAND ----------
 
 last_load = spark.sql("""
@@ -106,6 +116,18 @@ reload_chain = dbutils.widgets.get("reload_chain")
 reload_mark = dbutils.widgets.get("reload_after") or ("1900-01-01 00:00:00" if reload_chain else "")
 if reload_mark:
     last_load = reload_mark
+
+# rebuild_chain = "yes" (needs reload_chain): first delete every row of that chain from promotion_obs,
+# store_wide_promotions and promotion_quarantine, then reload it from bronze (store_id now comes from the file name,
+# which changes the key, so a plain MERGE would leave the old rows with the wrong store).
+dbutils.widgets.text("rebuild_chain", "")
+rebuild_chain = dbutils.widgets.get("rebuild_chain").lower() == "yes"
+if rebuild_chain:
+    if not reload_chain:
+        raise Exception("rebuild_chain=yes needs reload_chain")
+    print("Rebuild: deleting all rows of", reload_chain)
+    for _t in ("promotion_obs", "store_wide_promotions", "promotion_quarantine"):
+        spark.sql(f"DELETE FROM workspace.silver.{_t} WHERE chain = :c", args={"c": reload_chain})
 
 print("Reading bronze rows loaded after", last_load)
 
@@ -139,7 +161,11 @@ base AS (
       ELSE trim(coalesce(b.header['ChainID'], b.header['ChainId']))
     END AS chain_id,
     trim(coalesce(b.header['SubChainID'], b.header['SubChainId'])) AS sub_chain_id,
-    regexp_replace(trim(coalesce(b.header['StoreID'], b.header['StoreId'])), '^0+(?=.)', '') AS store_id,
+    -- Store from the FILE NAME, not the header (Carrefour headers carry old store codes); header only as a fallback.
+    coalesce(workspace.silver.store_id_from_file_name(b.file_name),
+             regexp_replace(trim(coalesce(b.header['StoreID'], b.header['StoreId'])), '^0+(?=.)', '')) AS store_id,
+    regexp_replace(trim(coalesce(b.header['StoreID'], b.header['StoreId'])), '^0+(?=.)', '') AS store_id_header,
+    CASE WHEN workspace.silver.store_id_from_file_name(b.file_name) IS NOT NULL THEN 'file_name' ELSE 'header' END AS store_id_source,
     -- Keshet publishes the same promotion as 1145634 and as 0001145634, depending on the layout.
     nullif(regexp_replace(trim(coalesce(b.promotion['PromotionID'], b.promotion['PromotionId'])), '^0+(?=.)', ''), '') AS promotion_id,
     -- The flat layout has no groups: the whole promotion counts as group 1.
@@ -289,7 +315,7 @@ MERGE INTO workspace.silver.store_wide_promotions AS t
 USING (
   SELECT chain, chain_id, store_id, promotion_id, description, start_at, end_at, club_code, reward_type,
          discount_rate, discounted_price, items_in_promotion, file_date, file_time, source,
-         source_file, bronze_loaded_at
+         source_file, bronze_loaded_at, store_id_header, store_id_source
   FROM classified
   WHERE reject_reason IS NULL AND store_wide AND bronze_loaded_at > :last_load_sw
   QUALIFY row_number() OVER (

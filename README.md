@@ -234,7 +234,9 @@ Managed Delta table, clustered by `file_date` and `chain`, built by `databricks/
 | `source` | STRING | `scraper` or `kaggle` |
 | `chain_id` | STRING | Chain ID published in the file |
 | `sub_chain_id` | STRING | Sub-chain ID published in the file |
-| `store_id` | STRING | Store ID without leading zeros; joins to `silver.stores` with `chain` |
+| `store_id` | STRING | Store ID without leading zeros, taken from the file name (see "Store id from the file name"); joins to `silver.stores` with `chain` |
+| `store_id_header` | STRING | The StoreID inside the file, without leading zeros, kept for checking; can differ from `store_id` (Carrefour). NULL in rows loaded before November 17th, 2026 and not reloaded |
+| `store_id_source` | STRING | `file_name`, or `header` when the file name had no store part (a FAIL in the DQ check `store_id_from_header_fallback`) |
 | `item_code` | STRING | Product code as published. Not always comparable across chains |
 | `item_type` | STRING | `ItemType` as published |
 | `price` | DECIMAL(10,2) | Regular price, always above 0 |
@@ -315,6 +317,8 @@ Managed Delta table, clustered by `file_date` and `chain`, built by `databricks/
 
 **Chain id from the file name:** when the header's `ChainID` is shorter than 13 digits, silver takes the 13-digit id from the original file name (`PromoFull<chain id>-<store>-...`) instead. The `wrong_chain` check still compares it with the folder's chain, so a file in the wrong folder is still caught. Needed for Kaggle's 2025 Victory and Mahsani Ashuk promotion files, whose header says `72906`. A one-off re-read after a rule change: run `build_promotion_obs` with notebook parameter `reload_after=<timestamp>`.
 
+**Store id from the file name (price_obs, promotion_obs, store_wide_promotions, items):** `store_id` comes from the file name, not from the `StoreID` inside the file. Decided November 17th, 2026 (found by Itai and Claude from raw files): Carrefour (`YAYNO_BITAN_AND_CARREFOUR`) puts an OLD store code in the header of many files. On November 17th, 2026, 78 of 152 price files differed; for example `PriceFull7290055700007-001-400-20261117-051002.xml.gz` is store 400 ("קרפור סיטי קניון כפר סבא") but its header says 103. 19 of those old codes are the ID of another real store (old code 420 is Carrefour Market Eilat), so two stores' prices landed under one key and the day's dedup kept only one. The file name matches the chain's Stores file. Of the other nine chains, a sample of three price and three promotion files each agreed with their header, except Yohananof's 19 stale files named `PriceFull...-7999-2024...xml.gz` (header 799; a test store, files of 2024 still listed on the site). The SQL function `workspace.silver.store_id_from_file_name` (in `silver_functions.py`, with a self-test) takes the last number before the date: `<Price|Promo>Full<13-digit chain id>-[<sub-chain>-]<store>-<yyyymmdd>-<hhmmss> or <yyyymmddhhmm>`, leading zeros dropped, case ignored; it covers the three formats seen (with sub-chain, Rami Levy and Keshet's `-<store>-<12 digits>`, Yohananof's `-<store>-<12 digits>`), and Kaggle rows too (their `file_name` is the original file's name). The header value is kept in `store_id_header`; `store_id_source` is `header` only when the name has no store part. DQ checks `store_id_header_mismatch` (WARNING above 0, expected for Carrefour) and `store_id_from_header_fallback` (FAIL above 0). `silver.stores` is unchanged: a Stores file lists one `Store` element per store. Rebuild after the change: notebook parameters `reload_chain=YAYNO_BITAN_AND_CARREFOUR` and `rebuild_chain=yes` first delete the chain's rows in `price_obs`, `quarantine`, `promotion_obs`, `store_wide_promotions` and `promotion_quarantine`, then reload them from bronze (a plain reload cannot fix them, because the key changed); `price_history` rebuilds in full from `price_obs` on its next run.
+
 **Matching the two layouts:** `promotion_id` loses its leading zeros, because Keshet publishes the same promotion as `1145634` in one layout and `0001145634` in the other. The flat layout has no groups, so its `group_id` is `1`. Reward type, quantities, price and discount come from the product in the Groups layout and from the promotion in the flat layout.
 
 **Repeats inside one file:** a product can appear twice in the same group of a promotion, usually once at 0.00 and once at its real price (Shufersal, 183,548 of its 183,652 repeats). The row with a positive price is kept. If both are positive, the lower price is kept (98 cases). The official meaning of these pairs isn't confirmed.
@@ -329,7 +333,8 @@ Managed Delta table, clustered by `file_date` and `chain`, built by `databricks/
 | `source` | STRING | `scraper` or `kaggle` |
 | `chain_id` | STRING | Chain ID published in the file |
 | `sub_chain_id` | STRING | Sub-chain ID published in the file |
-| `store_id` | STRING | Store ID without leading zeros; joins to `silver.stores` with `chain` |
+| `store_id` | STRING | Store ID without leading zeros, from the file name as in `price_obs`; joins to `silver.stores` with `chain` |
+| `store_id_header`, `store_id_source` | STRING | As in `price_obs` (also in `store_wide_promotions`) |
 | `promotion_id` | STRING | Promotion ID without leading zeros; unique only within a chain |
 | `group_id` | STRING | `GroupID`, or `1` in the flat layout |
 | `item_code` | STRING | Product code as published; joins to `price_obs` with `chain` and `store_id` |
@@ -465,6 +470,8 @@ Managed Delta table, written by `databricks/notebooks/silver_dq.py` (job `silver
 | `chain_without_price_files` | file | - | 0 | 0, PASS |
 | `kaggle_vs_scraper_file_mismatch` | file | 0 | - | see below |
 | `price_store_completeness` | file | 0 | - | 0, PASS |
+| `store_id_header_mismatch` | row | 0 | - | new November 17th, 2026; latest day's scraper rows whose header StoreID differs from the file name's, WARNING expected while Carrefour publishes old codes |
+| `store_id_from_header_fallback` | row | - | 0 | new November 17th, 2026; latest day's rows whose `store_id` had to come from the header |
 | `duplicate_column_conflicts` | row | 0 | - | new 2026-11-15; rows with `duplicate_column_conflict` in `quarantine` and `promotion_quarantine`, WARNING above 0 |
 | `promotion_repeated_keys` | row | - | 0 | 0, PASS |
 | `promotion_reject_percent` | row | 0.1 | 5 | 0.00003, PASS |

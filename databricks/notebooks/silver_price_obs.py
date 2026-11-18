@@ -30,6 +30,14 @@ CREATE TABLE IF NOT EXISTS workspace.silver.price_obs (
 CLUSTER BY (file_date, chain)
 """)
 
+# store_id comes from the file name (see silver_functions.store_id_from_file_name); the header's value is kept next to it.
+# store_id_source says where store_id came from: 'file_name', or 'header' when the name had no store part.
+# Tables created before 2026-11-17 get the two columns here (old rows stay NULL until reloaded).
+_cols = {r["col_name"] for r in spark.sql("DESCRIBE TABLE workspace.silver.price_obs").collect()}
+for _c in ("store_id_header", "store_id_source"):
+    if _c not in _cols:
+        spark.sql(f"ALTER TABLE workspace.silver.price_obs ADD COLUMN {_c} STRING")
+
 spark.sql("""
 CREATE TABLE IF NOT EXISTS workspace.silver.quarantine (
   row_key STRING,
@@ -76,6 +84,18 @@ if reload_chain:
 elif dbutils.widgets.get("reload_after"):
     last_load = dbutils.widgets.get("reload_after")
 
+# rebuild_chain = "yes" (needs reload_chain): first delete every row of that chain from price_obs and quarantine,
+# then reload it from bronze. Needed when a rule changes the KEY (store_id from the file name, 2026-11-17): the MERGE
+# would otherwise leave the old rows with the wrong store next to the new ones.
+dbutils.widgets.text("rebuild_chain", "")
+rebuild_chain = dbutils.widgets.get("rebuild_chain").lower() == "yes"
+if rebuild_chain:
+    if not reload_chain:
+        raise Exception("rebuild_chain=yes needs reload_chain")
+    print("Rebuild: deleting all rows of", reload_chain)
+    spark.sql("DELETE FROM workspace.silver.price_obs WHERE chain = :c", args={"c": reload_chain})
+    spark.sql("DELETE FROM workspace.silver.quarantine WHERE chain = :c", args={"c": reload_chain})
+
 print("Reading bronze rows loaded after", last_load)
 
 # COMMAND ----------
@@ -92,7 +112,12 @@ base AS (
     b.source,
     trim(coalesce(b.header['ChainID'], b.header['ChainId'])) AS chain_id,
     trim(coalesce(b.header['SubChainID'], b.header['SubChainId'])) AS sub_chain_id,
-    regexp_replace(trim(coalesce(b.header['StoreID'], b.header['StoreId'])), '^0+(?=.)', '') AS store_id,
+    -- Store from the FILE NAME: Carrefour's in-file StoreID is often an old store code (19 of them are other real stores).
+    -- Header value only when the name has no store part.
+    coalesce(workspace.silver.store_id_from_file_name(b.file_name),
+             regexp_replace(trim(coalesce(b.header['StoreID'], b.header['StoreId'])), '^0+(?=.)', '')) AS store_id,
+    regexp_replace(trim(coalesce(b.header['StoreID'], b.header['StoreId'])), '^0+(?=.)', '') AS store_id_header,
+    CASE WHEN workspace.silver.store_id_from_file_name(b.file_name) IS NOT NULL THEN 'file_name' ELSE 'header' END AS store_id_source,
     nullif(trim(b.fields['ItemCode']), '') AS item_code,
     nullif(trim(b.fields['ItemType']), '') AS item_type,
     try_cast(trim(b.fields['ItemPrice']) AS DECIMAL(10,2)) AS price,

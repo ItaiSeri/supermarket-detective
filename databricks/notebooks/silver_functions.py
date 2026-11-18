@@ -71,6 +71,35 @@ assert test.untouched == 2
 
 # COMMAND ----------
 
+# Store ID from the source file name (decided 2026-11-17): the file name is the chain's own address of the store and
+# matches the chain's Stores file; the in-file header can carry an OLD store code (Carrefour: 78 of 152 files on
+# 2026-11-17, 19 old codes equal another real store's ID, e.g. 420 = Carrefour Market Eilat).
+#   <PriceFull|PromoFull|Price|Promo><13-digit chain id>-[<sub-chain>-]<store>-<yyyymmdd>-<hhmmss | yyyymmddhhmm>
+# The store is the last number before the date. Leading zeros are dropped like everywhere else. NULL when the
+# name does not fit (the notebooks then fall back to the header and mark store_id_source = 'header').
+spark.sql(r"""
+CREATE OR REPLACE FUNCTION workspace.silver.store_id_from_file_name(file_name STRING)
+RETURNS STRING
+COMMENT 'Store ID (no leading zeros) from a chain file name, NULL when the name has no store part'
+RETURN nullif(regexp_replace(
+  regexp_extract(file_name, '(?i)^[a-z]+[0-9]{13}-(?:[0-9]+-)*?([0-9]+)-20[0-9]{6}-?[0-9]{4,6}', 1),
+  '^0+(?=.)', ''), '')
+""")
+
+sid_test = spark.sql("""
+SELECT
+  workspace.silver.store_id_from_file_name('PriceFull7290055700007-001-400-20261117-051002.xml.gz') AS carrefour,
+  workspace.silver.store_id_from_file_name('PriceFull7290803800003-7999-202405221225.xml.gz')       AS no_subchain,
+  workspace.silver.store_id_from_file_name('pricefull7290058140886-039-202611170600.xml.gz')        AS rami_levy,
+  workspace.silver.store_id_from_file_name('PromoFull7290803800003-00-1-202611170600.xml.gz')       AS yohananof_promo,
+  workspace.silver.store_id_from_file_name('PriceFull7290055700007-001-008-20261117-051002.gz.xml.gz') AS leading_zeros,
+  workspace.silver.store_id_from_file_name('Stores7290055700007-000-20261117-051002.xml.gz')        AS stores_file
+""").first()
+print(sid_test)
+assert (sid_test.carrefour, sid_test.no_subchain, sid_test.rami_levy, sid_test.yohananof_promo, sid_test.leading_zeros) ==        ("400", "7999", "39", "1", "8")
+
+# COMMAND ----------
+
 # Chain ID aliases: a chain whose files carried another ChainID in the past. Silver's wrong_chain check
 # (price_obs, promotion_obs, items) accepts a row when its header ChainID equals the chain's own ID OR an alias row
 # matches the chain, the ID and the file date. Rows keep the original chain_id value (provenance).

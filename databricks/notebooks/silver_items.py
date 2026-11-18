@@ -63,7 +63,9 @@ base AS (
   SELECT
     b.chain,
     trim(coalesce(b.header['ChainID'], b.header['ChainId'])) AS chain_id,
-    regexp_replace(trim(coalesce(b.header['StoreID'], b.header['StoreId'])), '^0+(?=.)', '') AS store_id,
+    -- Store from the file name, as in silver_price_obs (header only as a fallback)
+    coalesce(workspace.silver.store_id_from_file_name(b.file_name),
+             regexp_replace(trim(coalesce(b.header['StoreID'], b.header['StoreId'])), '^0+(?=.)', '')) AS store_id,
     nullif(trim(b.fields['ItemCode']), '') AS item_code,
     nullif(trim(b.fields['ItemType']), '') AS item_type,
     try_cast(trim(b.fields['ItemPrice']) AS DECIMAL(10,2)) AS price,
