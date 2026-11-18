@@ -14,6 +14,7 @@ dbutils.widgets.text("model", "databricks-gpt-oss-120b")
 dbutils.widgets.text("prompt_version", "v2")
 dbutils.widgets.text("batch_size", "5000")
 dbutils.widgets.text("max_minutes", "150")  # no new batch starts after this many minutes
+dbutils.widgets.text("scope", "active")  # mode=full only: active (seen in the last 14 days) | history (all the others)
 mode = dbutils.widgets.get("mode")
 sample_size = int(dbutils.widgets.get("sample_size"))
 assert mode in ("pilot", "eval", "full"), f"mode must be 'pilot', 'eval' or 'full', got {mode!r}"
@@ -217,23 +218,33 @@ if mode == "full":
         rows_sent BIGINT, rows_ok BIGINT, rows_error BIGINT, sample_error STRING)
         COMMENT 'One row per ai_query batch of mode=full.'""")
 
-    # Scope, built once per run: active products (last_seen within 14 days of the newest), minus products
-    # sold only in Shufersal Be stores (sub_chain_id 5; Be is out of gold). Most-shared products first.
+    # Scope, built once per run, minus products sold only in Shufersal Be stores (sub_chain_id 5; Be is out of
+    # gold). Most-shared products first.
+    #   scope=active:  last_seen within 14 days of the newest (prices seen in the last 14 days)
+    #   scope=history: every other product (seen only earlier, mostly from the Kaggle backfill), any date
+    # Results go to the same table; a product is never classified twice for one model + prompt_version.
+    scope = dbutils.widgets.get("scope")
+    assert scope in ("active", "history"), f"scope must be active or history, got {scope}"
+    if scope == "active":
+        items_where = "i.last_seen >= (SELECT date_sub(max(last_seen), 14) FROM workspace.silver.items)"
+        ph_where = "ph.last_seen >= date_sub(current_date(), 14) AND"
+    else:
+        items_where = "i.last_seen < (SELECT date_sub(max(last_seen), 14) FROM workspace.silver.items)"
+        ph_where = ""
     spark.sql(input_text_query(
-        """workspace.silver.items i
-        WHERE i.last_seen >= (SELECT date_sub(max(last_seen), 14) FROM workspace.silver.items)
+        f"""workspace.silver.items i
+        WHERE {items_where}
           AND i.item_name IS NOT NULL AND trim(i.item_name) <> ''
           AND i.item_key IN (
             SELECT workspace.silver.item_key(ph.chain, ph.item_code, ph.item_type)
             FROM workspace.silver.price_history ph
             LEFT JOIN workspace.silver.stores s ON s.chain = ph.chain AND s.store_id = ph.store_id
-            WHERE ph.last_seen >= date_sub(current_date(), 14)
-              AND NOT (ph.chain = 'SHUFERSAL' AND s.sub_chain_id = '5'))""",
+            WHERE {ph_where} NOT (ph.chain = 'SHUFERSAL' AND coalesce(s.sub_chain_id, '') = '5'))""",
         "i.item_key, i.chains_count", "full_scope_v"))
     spark.sql(f"CREATE OR REPLACE TABLE {SCOPE} AS SELECT * FROM full_scope_v "
               "WHERE input_text IS NOT NULL AND trim(input_text) <> ''")
     n_scope = spark.table(SCOPE).count()
-    print(f"scope: {n_scope} products; model {model}, prompt {prompt_version}, batch {batch_size}, max {max_minutes} min")
+    print(f"scope {scope}: {n_scope} products; model {model}, prompt {prompt_version}, batch {batch_size}, max {max_minutes} min")
 
     def remaining():
         return spark.sql(f"""SELECT count(*) FROM {SCOPE} s WHERE NOT EXISTS (
@@ -292,7 +303,7 @@ if mode == "full":
             raise Exception(f"batch {batch_id}: {sent - ok} of {sent} rows failed (over 20%), stopping. "
                             f"Sample error: {sample_err}. Saved batches stay; rerun to resume.")
 
-    summary = {"mode": "full", "batches": n_batches, "rows_ok": int(done_rows), "left": left, "stopped": stop_reason}
+    summary = {"mode": "full", "scope": scope, "model": model, "batches": n_batches, "rows_ok": int(done_rows), "left": left, "stopped": stop_reason}
     print(summary)
     dbutils.notebook.exit(json.dumps(summary))
 
