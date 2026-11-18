@@ -1,0 +1,26 @@
+match_type,value,city_code,note
+name,תל אביב,5000,CBS name is תל אביב - יפו
+name,תל-אביב,5000,
+name,תל אבית יפה,5000,typo in Victory's file
+name,ת"א,5000,
+name,יד אליהו,5000,Tel Aviv neighbourhood
+name,נחלת יצחק,5000,Tel Aviv neighbourhood
+name,גבעז זאב,3730,typo for גבעת זאב
+name,מודיעין,1200,CBS name is מודיעין-מכבים-רעות
+name,עפולה עילית,7700,merged into עפולה
+name,יקנעם,240,CBS name is יקנעם עילית
+name,יוקנעם,240,
+name,טירת הכרמל,2100,CBS name is טירת כרמל
+name,טבעון,2300,CBS name is קריית טבעון
+name,קרית חיים,4000,Haifa neighbourhood
+name,קרית אליעזר,4000,Haifa neighbourhood
+name,הדר,4000,Haifa neighbourhood (Hadar)
+name,חוצות המפרץ,4000,Haifa shopping area
+name,גבעת רם,3000,Jerusalem neighbourhood
+name,תלפיות,3000,Jerusalem neighbourhood
+name,פולג,7400,Netanya industrial area
+name,סגולה,7900,Petah Tikva neighbourhood
+name,ראשלצ,8300,abbreviation of ראשון לציון
+name,עקרון,469,CBS name is קרית עקרון
+code,50,9800,old code of גבעת עדה; merged into בנימינה-גבעת עדה
+code,1306,1224,old code of צור יגאל; merged into כוכב יאיר

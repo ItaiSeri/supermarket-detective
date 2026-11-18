@@ -189,6 +189,11 @@ Managed Delta table, rebuilt in full on each run by `databricks/notebooks/silver
 | `address` | STRING | Address as published |
 | `city_code` | INT | `City` when it is a non-zero number, otherwise NULL |
 | `city_name` | STRING | `City` when it is Hebrew text, otherwise NULL |
+| `city_code_resolved` | INT | The store's Central Bureau of Statistics (CBS) locality code, found by the city rule below; NULL when none is found |
+| `city_name_resolved` | STRING | CBS Hebrew name of `city_code_resolved` |
+| `city_name_en` | STRING | CBS English name |
+| `district_name` | STRING | CBS district (Hebrew) |
+| `city_source` | STRING | Which rule found the city: `code`, `code_alias`, `name`, `store_name`, `address`, or `none` |
 | `zip_code` | STRING | ZIP as published; NULL if empty or all zeros |
 | `store_type` | STRING | `StoreType` as published |
 | `is_physical` | BOOLEAN | `store_type` is `1`; never NULL |
@@ -202,7 +207,18 @@ Assumptions, not official definitions:
 
 - **`StoreType` 1 means a physical store.** It excludes every online store found so far, but the codes' official meaning isn't confirmed.
 - **The Eilat rule** (`City` or a ZIP starting with `88`) is ours. Its 13 stores match the count made separately from the chains' files.
-- **`city_code` looks like the Central Bureau of Statistics locality codes.** Only `2600` is confirmed, and there is no code-to-name lookup yet.
+- **`city_code` is the CBS locality code** for the chains that publish a number; `city_code_resolved` checks it against the CBS list (seed below) instead of trusting it.
+
+**City rule (added November 18th, 2026).** `silver_stores.py` resolves each store's city in this order; the first hit wins and is recorded in `city_source`:
+
+1. `code`: the published numeric city code (not 0) is in the CBS locality list.
+2. `code_alias`: the code is a known wrong code listed in the aliases (`match_type = code`).
+3. `name`: `city_name` text, after normalizing (hyphens, quotes, dots, commas and brackets become spaces; `יי` becomes `י`, `וו` becomes `ו`; spaces collapsed, then removed for the comparison), equals a CBS name or a name alias (`match_type = name`).
+4. `store_name`: a locality name of 3 or more letters (the longest first) appears as whole words in `store_name`. Words `אזור`, `רחוב`, `מרכז`, `כרמים` are skipped.
+5. `address`: the same in `address`, also skipping `שדרות` and `מבקיעים`.
+6. `none`.
+
+Seeds in `databricks/seed/`: `cbs_localities.csv` (the CBS locality list, 1,316 rows: code, Hebrew and English name, subdistrict, district, regional council) and `city_aliases.csv` (`match_type`, `value`, `city_code`, `note`; extra spellings and wrong codes, edited by hand). The notebook stops if an alias points at a code that is not in the CBS list. Tested on the 849 in-scope stores on November 18th, 2026: 835 get a city and 14 stay `none` (Yohananof 9, Rami Levy 2, Victory 2, Shufersal 1; mostly Yohananof stores with `unknown` addresses). `is_eilat` is unchanged; the notebook prints it next to `city_code_resolved = 2600` for comparison.
 
 ### Silver table: `workspace.silver.price_obs`
 
