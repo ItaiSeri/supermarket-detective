@@ -64,6 +64,13 @@ resources:
             - task_key: create_functions
           notebook_task:
             notebook_path: ./notebooks/silver_items.py
+        # reads silver.stores (with the resolved city) and price_obs; moved here from gold_dims (G1b-2a v2)
+        - task_key: build_store_size_signals
+          depends_on:
+            - task_key: build_stores
+            - task_key: build_price_obs
+          notebook_task:
+            notebook_path: ./notebooks/silver_store_size_signals.py
         - task_key: build_dq
           depends_on:
             - task_key: build_price_obs
@@ -76,6 +83,7 @@ resources:
           depends_on:
             - task_key: build_dq
             - task_key: build_promotion_obs
+            - task_key: build_store_size_signals
           notebook_task:
             notebook_path: ./notebooks/ops_run_log.py
             base_parameters:
