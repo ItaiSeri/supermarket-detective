@@ -193,7 +193,7 @@ Managed Delta table, rebuilt in full on each run by `databricks/notebooks/silver
 | `city_name_resolved` | STRING | CBS Hebrew name of `city_code_resolved` |
 | `city_name_en` | STRING | CBS English name |
 | `district_name` | STRING | CBS district (Hebrew) |
-| `city_source` | STRING | Which rule found the city: `code`, `code_alias`, `name`, `store_name`, `address`, or `none` |
+| `city_source` | STRING | Which rule found the city: `code`, `code_alias`, `name`, `store_name`, `address`, `override` (hand-made seed, see below) or `none` |
 | `zip_code` | STRING | ZIP as published; NULL if empty or all zeros |
 | `store_type` | STRING | `StoreType` as published |
 | `is_physical` | BOOLEAN | `store_type` is `1` (physical) or `3` (physical + online); never NULL |
@@ -220,6 +220,8 @@ Assumptions, not official definitions:
 4. `store_name`: a locality name of 3 or more letters (the longest first) appears as whole words in `store_name`. Words `אזור`, `רחוב`, `מרכז`, `כרמים` are skipped.
 5. `address`: the same in `address`, also skipping `שדרות` and `מבקיעים`.
 6. `none`.
+
+Then **location overrides** (`seed/store_location_overrides.csv`, columns `chain`, `store_id`, `city_name`, `city_code`, `district_name`, `note`; added November 19th, 2026): for a store the rules above could not place (`city_source = 'none'`) the notebook uses the row of the file, sets `city_source = 'override'`, and takes the city name and the district from it. `city_code` is empty when the place is not a CBS locality (a regional council, an industrial zone); then `city_code_resolved` stays NULL and `city_name_resolved` is the name from the file. A filled `city_code` must be in the CBS list, and `district_name` must be one of the CBS district names (the notebook stops otherwise). The file is only for stores no rule can place, and a row has no effect once a rule finds the store. Stores still to be placed by Itai: Yohananof 1, 2, 8 and 42.
 
 Seeds in `databricks/seed/`: `cbs_localities.csv` (the CBS locality list, 1,316 rows: code, Hebrew and English name, subdistrict, district, regional council) and `city_aliases.csv` (`match_type`, `value`, `city_code`, `note`; extra spellings and wrong codes, edited by hand). The notebook stops if an alias points at a code that is not in the CBS list. Tested on the 849 in-scope stores on November 18th, 2026: 835 get a city and 14 stay `none` (Yohananof 9, Rami Levy 2, Victory 2, Shufersal 1; mostly Yohananof stores with `unknown` addresses). `is_eilat` is unchanged; the notebook prints it next to `city_code_resolved = 2600` for comparison.
 
@@ -622,7 +624,7 @@ Decided by Itai on November 19th, 2026, after checking the Lod and Ramla stores.
 - **Victory:** a store name with `סיטי` is small (`format`), otherwise medium (`chain_default`).
 - **Mahsani Ashuk:** `מחסני השוק` large, `מחסני השוק בשבילך` medium, `מחסני השוק בסיטי` small, `מחסני השוק מהדרין` medium (`format`); no format medium (`chain_default`).
 - **Yohananof:** n of 9,000 or more large, 6,000 or more medium, else small (`count`); an industrial location makes it large; a mall location turns a `large` count into medium (basis `location`); no count: NULL.
-- **Tiv Taam, Keshet:** medium (`chain_default`).
+- **Keshet:** a store name starting with `קולינריק` (the gourmet deli sub-chain, stores 102-105) or containing `פודטראק עזריאלי` (store 91) is small (`R_KESHET_SMALL_FORMAT`, basis `format`); the rest medium (`chain_default`). **Tiv Taam:** medium (`chain_default`).
 - **Closed stores** have no product count in the last 30 days: rules that need a count give NULL with basis `no_data`; the other rules (format, chain default) apply as usual.
 - **Anything else:** NULL with rule `R_UNMATCHED` (expected 0 rows; the notebook prints a warning count).
 

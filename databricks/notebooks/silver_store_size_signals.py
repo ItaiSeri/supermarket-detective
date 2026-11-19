@@ -262,7 +262,13 @@ def size_bucket(row):
         if loc == "mall" and b == "large":
             return "medium", "R_YOHANANOF_MALL", "location"
         return b, "R_YOHANANOF_COUNT", "count"
-    if c in ("TIV_TAAM", "KESHET"):
+    if c == "KESHET":
+        name = (row["store_name"] or "").strip()
+        # R_KESHET_SMALL_FORMAT: Kolinarik gourmet deli branches and the Azrieli food truck are small
+        if name.startswith("קולינריק") or "פודטראק עזריאלי" in name:
+            return "small", "R_KESHET_SMALL_FORMAT", "format"
+        return "medium", "R_CHAIN_MEDIUM", "chain_default"
+    if c == "TIV_TAAM":
         return "medium", "R_CHAIN_MEDIUM", "chain_default"
     return None, "R_UNMATCHED", "no_data"
 

@@ -79,6 +79,7 @@ FROM flagged
 #   4 store_name  a locality name (3+ letters, longest first) found as whole words in store_name
 #   5 address     same in address
 #   else none
+# Step 2b then applies seed/store_location_overrides.csv to the 'none' stores (city_source = 'override').
 # A few thousand names at most, ~1k stores: plain pandas on the driver.
 import re
 import pandas as pd
@@ -145,6 +146,26 @@ res = [resolve_city(c if pd.notna(c) else None, n, sn, ad)
        for c, n, sn, ad in zip(stores_pd["city_code"], stores_pd["city_name"], stores_pd["store_name"], stores_pd["address"])]
 stores_pd["city_code_resolved"] = [int(c) if c else None for c, _ in res]
 stores_pd["city_source"] = [s for _, s in res]
+
+# Step 2b: location overrides (seed/store_location_overrides.csv), for stores no rule can place. Applied after the
+# resolver and only where it found nothing (city_source = 'none'); then city_source = 'override'. city_code is
+# empty when the place is not a CBS locality (a regional council, an industrial zone); district_name is always
+# filled and must be a district of the CBS list.
+ovr_pd = pd.read_csv("../seed/store_location_overrides.csv", dtype=str, keep_default_na=False, encoding="utf-8-sig")
+assert list(ovr_pd.columns) == ["chain", "store_id", "city_name", "city_code", "district_name", "note"], "bad overrides seed"
+assert not ovr_pd.duplicated(["chain", "store_id"]).any(), "store_location_overrides.csv: repeated chain + store_id"
+assert ovr_pd["district_name"].isin(set(cbs_pd["district_name"])).all(),     "store_location_overrides.csv: district_name is not a district of cbs_localities.csv"
+assert ovr_pd["city_code"].isin(set(cbs_pd["city_code"]) | {""}).all(), "store_location_overrides.csv: city_code not in CBS list"
+ovr_key = {(c, i): r for c, i, r in zip(ovr_pd["chain"], ovr_pd["store_id"], ovr_pd.to_dict("records"))}
+n_override = 0
+for idx, (c, i, src) in enumerate(zip(stores_pd["chain"], stores_pd["store_id"], stores_pd["city_source"])):
+    o = ovr_key.get((c, i))
+    if o is not None and src == "none":
+        stores_pd.at[idx, "city_source"] = "override"
+        stores_pd.at[idx, "city_code_resolved"] = int(o["city_code"]) if o["city_code"] else None
+        n_override += 1
+print(f"location overrides applied: {n_override} of {len(ovr_pd)} rows in the seed")
+spark.createDataFrame(ovr_pd[["chain", "store_id", "city_name", "district_name"]]).createOrReplaceTempView("store_overrides")
 resolved_pd = stores_pd[["chain", "store_id", "city_code_resolved", "city_source"]].astype({"city_code_resolved": "object"})
 resolved_pd = resolved_pd.where(resolved_pd.notna(), None)
 spark.createDataFrame(
@@ -166,14 +187,15 @@ SELECT
   b.chain, b.chain_id, b.sub_chain_id, b.store_id, b.store_id_raw, b.store_name, b.address,
   b.city_code, b.city_name,
   r.city_code_resolved,
-  c.city_name_resolved,
+  coalesce(c.city_name_resolved, o.city_name) AS city_name_resolved,
   c.city_name_en,
-  c.district_name,
+  coalesce(c.district_name, o.district_name) AS district_name,
   r.city_source,
   b.zip_code, b.store_type, b.is_physical, b.is_eilat, b.last_file_date, b.first_seen, b.last_seen, b.is_open, b.source_file
 FROM stores_base b
 LEFT JOIN stores_city r ON r.chain = b.chain AND r.store_id = b.store_id
 LEFT JOIN cbs_localities c ON c.city_code_resolved = r.city_code_resolved
+LEFT JOIN store_overrides o ON o.chain = b.chain AND o.store_id = b.store_id AND r.city_source = 'override'
 """)
 
 # COMMAND ----------
