@@ -637,7 +637,7 @@ Checked on the latest Stores file of each of the 10 chains, collected 2026-11-09
 
 - **ZIP code:** usable for Keshet, but all Yohananof ZIPs are `0000000` or empty. Yohananof's city can come only from the store name or a hand-made store-to-city table.
 - **Eilat rule:** `City` is `2600` or `אילת`, or the ZIP starts with `88`, and the store is physical. Don't search for the word `אילת` in names or addresses: it matches streets and stores in other cities.
-- **Eilat stores:** 13 physical stores in 4 chains (Shufersal 7, Carrefour 3, Mahsani Ashuk 2, Rami Levy 1). One Carrefour Eilat store has a wrong ZIP (`4333345`), so the ZIP alone isn't enough. Mahsani Ashuk's `96 אינטרנט אילת` is online and is excluded.
+- **Eilat stores:** 13 physical stores in 4 chains (Shufersal 7, Carrefour 3, Mahsani Ashuk 2, Rami Levy 1); 3 of the Shufersal ones are Be (pharmacy) stores (437, 620, 748), so `gold.dim_store` has **10 Eilat supermarkets** (Shufersal 4). One Carrefour Eilat store has a wrong ZIP (`4333345`), so the ZIP alone isn't enough. Mahsani Ashuk's `96 אינטרנט אילת` is online and is excluded.
 - **No Eilat branch at Keshet or Yohananof:** confirmed against each chain's own branch list on 2026-11-10 (Keshet 19 branches + 2 robotic delivery centres, Yohananof 47 branches).
 - **Not physical stores:** online stores at Mahsani Ashuk (96, 97), Victory (97) and Hazi Hinam (103), and probably Keshet's `ממ"ר` stores (116, 120), which look like delivery centres. `silver.stores` marks these with `is_physical`.
 - **In the feed but not on the chain's branch list:** Yohananof 002 (`יוחננוף ישן`) and Keshet 010 (`גבעת רם`); check in silver whether they still publish prices. Yohananof 146, 150 and 152 are pickup points.
