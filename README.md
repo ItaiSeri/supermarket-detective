@@ -561,7 +561,7 @@ Checked November 17th, 2026: 324,565 rows (296,607 shared), 127,414 active, 0 wi
 
 ### Silver table: `workspace.silver.store_size_signals`
 
-A helper for `dim_store`, not for Power BI, and it decides nothing yet: no column says a store's final size. Managed Delta table, rebuilt in full by `databricks/notebooks/silver_store_size_signals.py` (job `silver_load`, task `build_store_size_signals`, after `build_stores` and `build_price_obs`; `log_run` waits for it). It was a gold table built inside `gold_dims.py` until November 18th, 2026; it reads only silver tables, so it moved to silver (version 2), and the notebook drops the old `workspace.gold.store_size_signals`. One row per `chain` + `store_id`, for physical stores (`silver.stores.is_physical`) except Shufersal Be (`sub_chain_id = '5'`). The notebook stops if a key repeats or the row count differs from the in-scope stores. It carries `city_name_resolved` and `district_name` from `silver.stores`.
+A helper for `dim_store`, not for Power BI. Since November 19th, 2026 it also holds the final size: `size_bucket` (`small`, `medium`, `large` or NULL), `size_rule` (the rule id) and `size_basis` (`format`, `count`, `chain_default`, `location` or `no_data`); all other columns are diagnostics (see "Store size rules" below). Managed Delta table, rebuilt in full by `databricks/notebooks/silver_store_size_signals.py` (job `silver_load`, task `build_store_size_signals`, after `build_stores` and `build_price_obs`; `log_run` waits for it). It was a gold table built inside `gold_dims.py` until November 18th, 2026; it reads only silver tables, so it moved to silver (version 2), and the notebook drops the old `workspace.gold.store_size_signals`. One row per `chain` + `store_id`, for physical stores (`silver.stores.is_physical`) except Shufersal Be (`sub_chain_id = '5'`). The notebook stops if a key repeats or the row count differs from the in-scope stores. It carries `city_name_resolved` and `district_name` from `silver.stores`.
 
 **Signal 1, product count (v2 rules).** `days_observed` = distinct `file_date` of the store in `silver.price_obs` in the last 30 days; `median_products` = median over those days of the price rows per day. `chain_ratio` = `median_products` / the 75th percentile of `median_products` over the chain's stores with 5 or more days (produce stores left out); it is information only and no rule uses it.
 
@@ -573,6 +573,22 @@ A helper for `dim_store`, not for Power BI, and it decides nothing yet: no colum
 **Signal 2, location keywords.** Seed `databricks/seed/store_location_keywords.csv` (`keyword`, `location_type`: `industrial`, `mall`, `commercial_center`; edit it to change the list). A keyword matches `store_name` or `address` only as a whole word: not touching a letter or digit on either side, case-insensitive (so `BIG` matches). `location_type` and `location_keyword` hold the winner: industrial before mall before commercial_center, then the longest keyword; other matching types go to `location_other_matches`. The keyword `מול` ("opposite") was removed on November 18th, 2026: it matched street directions, not malls.
 
 **The chain's own label, for comparison only.** `format_label`: Shufersal and Mahsani Ashuk take `SubChainName` from the store's Stores file; Carrefour takes `היפר`, `מרקט` or `סיטי` from `store_name`; Rami Levy is `רמי לוי בשכונה` for store numbers 700 to 799, else `רמי לוי`; other chains NULL. `label_size` is `small` for `שופרסל אקספרס`, `יש Good`, `ישבשכונה`, Carrefour `סיטי` and `רמי לוי בשכונה`, `full` for any other label, NULL without a label.
+
+### Store size rules
+
+Decided by Itai on November 19th, 2026, after checking the Lod and Ramla stores. They aim at about 85-90% right; this is not measured. First matching rule wins; `n` = `median_products`; the format names are the `format_label` values as published. The code is the ordered function `size_bucket` in `silver_store_size_signals.py`.
+
+- **Osher Ad:** large (`R_OSHER`, basis `chain_default`). **Hazi Hinam:** large (`R_HAZI`); produce-only stores get NULL (`R_PRODUCE`).
+- **Shufersal:** `יוניברס` large; `שופרסל אקספרס`, `יש Good` and `ישבשכונה` small; `שופרסל שלי`, `יש חסד`, `שערי רווחה`, `Cash&Carry` medium (all basis `format`). `שופרסל דיל` is large when the location type is industrial or the keyword is a power-center one (`פאוור סנטר`, `פאואר סנטר`, `ביג`, `BIG`; basis `location`), otherwise medium. No format: medium (`chain_default`).
+- **Rami Levy:** `רמי לוי בשכונה` small (`format`); otherwise n of 13,000 or more large, below that medium (`count`); no count: NULL (`no_data`).
+- **Carrefour (YAYNO_BITAN_AND_CARREFOUR):** `היפר` large, `מרקט` medium, `סיטי` small (`format`). No format in the name: n of 10,500 or more large, 8,300 or more medium, else small (`count`); an industrial location moves it one step up (basis `location`); no count: NULL.
+- **Victory:** a store name with `סיטי` is small (`format`), otherwise medium (`chain_default`).
+- **Mahsani Ashuk:** `מחסני השוק` large, `מחסני השוק בשבילך` medium, `מחסני השוק בסיטי` small, `מחסני השוק מהדרין` medium (`format`); no format medium (`chain_default`).
+- **Yohananof:** n of 9,000 or more large, 6,000 or more medium, else small (`count`); an industrial location makes it large; a mall location turns a `large` count into medium (basis `location`); no count: NULL.
+- **Tiv Taam, Keshet:** medium (`chain_default`).
+- **Anything else:** NULL with rule `R_UNMATCHED` (expected 0 rows; the notebook prints a warning count).
+
+The keyword `עזריאלי` (mall) was added to the seed on November 19th, 2026; its five matches were all stores in Azrieli malls. The non-food signal (items priced over 1,000 shekels) was rejected: chains like Victory list appliances in every branch's file, City stores included, and Shufersal and Osher Ad publish none.
 
 Result of version 1 on November 17th, 2026 (the old gold table, old rules): no chain had a gap, 9 stores were `suspect` (4 Hazi Hinam produce stores, 5 Rami Levy stores), 70 stores had a location type. Version 2 has not run yet (the daily compute quota was used up on November 18th); its gap results are not measured.
 

@@ -1,6 +1,6 @@
 # Databricks notebook source
 # silver.store_size_signals (G1b-2a v2): two cheap signals of how big each store is, saved for review. A helper
-# table for gold.dim_store, not for Power BI. Nothing here decides a store's final size.
+# table for gold.dim_store, not for Power BI. size_bucket / size_rule / size_basis hold the final size.
 # Scope: physical stores except Shufersal Be (sub_chain_id 5, out of gold). One row per chain + store_id.
 #  Signal 1: median over the last 30 days of the number of price rows per file_date (needs 5+ days of files),
 #            compared inside the chain with a valid-split gap rule (below). chain_ratio (vs the chain's 75th
@@ -187,21 +187,109 @@ base_pd["label_size"] = base_pd["format_label"].map(
 
 # COMMAND ----------
 
+# Final size bucket (decided by Itai 2026-11-19). Ordered rules per chain, first match wins; n = median_products.
+# size_basis says what decided it: format (the chain's own label), count (product count), chain_default,
+# location (keywords), no_data. The size_by_count / label_size columns stay as diagnostics.
+POWER_WORDS = {"פאוור סנטר", "פאואר סנטר", "ביג", "big"}
+STEP_UP = {"small": "medium", "medium": "large"}
+
+
+def is_power_center(row):
+    words = [str(row["location_keyword"] or "")] + [
+        x.split(":", 1)[-1] for x in str(row["location_other_matches"] or "").split(", ") if x]
+    return any(w.lower() in POWER_WORDS for w in words)
+
+
+def by_count(n, large, medium):
+    return "large" if n >= large else ("medium" if n >= medium else "small")
+
+
+def size_bucket(row):
+    c, f, n = row["chain"], row["format_label"], row["median_products"]
+    no_n = n is None or pd.isna(n)
+    loc = row["location_type"]
+    if c == "OSHER_AD":  # R_OSHER: every Osher Ad store is a large store
+        return "large", "R_OSHER", "chain_default"
+    if c == "HAZI_HINAM":
+        if row["store_format_flag"] == "produce":  # R_PRODUCE: produce-only stores get no bucket
+            return None, "R_PRODUCE", "chain_default"
+        return "large", "R_HAZI", "chain_default"  # R_HAZI: all other Hazi Hinam stores are large
+    if c == "SHUFERSAL":
+        if f == "יוניברס":
+            return "large", "R_SHUF_UNIVERSE", "format"
+        if f in ("שופרסל אקספרס", "יש Good"):
+            return "small", "R_SHUF_SMALL", "format"
+        if f == "שופרסל דיל":  # Deal: large if industrial zone or power center, else medium
+            if loc == "industrial" or is_power_center(row):
+                return "large", "R_SHUF_DEAL_LOC", "location"
+            return "medium", "R_SHUF_DEAL", "format"
+        if f in ("שופרסל שלי", "יש חסד", "שערי רווחה", "Cash&Carry"):
+            return "medium", "R_SHUF_MEDIUM", "format"
+        if f == "ישבשכונה":
+            return "small", "R_SHUF_NEIGHBOURHOOD", "format"
+        return "medium", "R_SHUF_DEFAULT", "chain_default"
+    if c == "RAMI_LEVY":
+        if f == RAMI_NEIGHBOURHOOD:  # R_RAMI_BESHCHUNA
+            return "small", "R_RAMI_BESHCHUNA", "format"
+        if no_n:
+            return None, "R_RAMI_NO_DATA", "no_data"
+        return ("large" if n >= 13000 else "medium"), "R_RAMI_COUNT", "count"
+    if c == "YAYNO_BITAN_AND_CARREFOUR":
+        if f in (HYPER, MARKET, CITY):  # the chain's own format word in the name
+            return {HYPER: "large", MARKET: "medium", CITY: "small"}[f], "R_CARREFOUR_FORMAT", "format"
+        if no_n:
+            return None, "R_CARREFOUR_NO_DATA", "no_data"
+        b = by_count(n, 10500, 8300)
+        if loc == "industrial" and b in STEP_UP:  # industrial zone: one step up
+            return STEP_UP[b], "R_CARREFOUR_COUNT_INDUSTRIAL", "location"
+        return b, "R_CARREFOUR_COUNT", "count"
+    if c == "VICTORY_NEW_SOURCE":
+        if CITY in (row["store_name"] or ""):
+            return "small", "R_VICTORY_CITY", "format"
+        return "medium", "R_VICTORY_DEFAULT", "chain_default"
+    if c == "MAHSANI_ASHUK_NEW_SOURCE":
+        m = {"מחסני השוק": "large", "מחסני השוק בשבילך": "medium",
+             "מחסני השוק בסיטי": "small", "מחסני השוק מהדרין": "medium"}
+        if f in m:
+            return m[f], "R_MAHSANI_FORMAT", "format"
+        return "medium", "R_MAHSANI_DEFAULT", "chain_default"
+    if c == "YOHANANOF":
+        if no_n:
+            return None, "R_YOHANANOF_NO_DATA", "no_data"
+        b = by_count(n, 9000, 6000)
+        if loc == "industrial":
+            return "large", "R_YOHANANOF_INDUSTRIAL", "location"
+        if loc == "mall" and b == "large":
+            return "medium", "R_YOHANANOF_MALL", "location"
+        return b, "R_YOHANANOF_COUNT", "count"
+    if c in ("TIV_TAAM", "KESHET"):
+        return "medium", "R_CHAIN_MEDIUM", "chain_default"
+    return None, "R_UNMATCHED", "no_data"
+
+
+_sb = base_pd.apply(size_bucket, axis=1, result_type="expand")
+base_pd["size_bucket"], base_pd["size_rule"], base_pd["size_basis"] = _sb[0], _sb[1], _sb[2]
+n_unmatched = int((base_pd["size_rule"] == "R_UNMATCHED").sum())
+if n_unmatched:
+    print(f"WARNING: {n_unmatched} stores matched no size rule (R_UNMATCHED)")
+
+# COMMAND ----------
+
 base_pd = base_pd.astype(object).where(base_pd.notna(), None)
 cols = ["chain", "store_id", "store_name", "address", "city_name_resolved", "district_name",
         "days_observed", "median_products", "chain_ratio", "size_by_count", "size_by_count_reason",
         "store_format_flag", "location_type", "location_keyword", "location_other_matches",
-        "format_label", "label_size"]
+        "format_label", "label_size", "size_bucket", "size_rule", "size_basis"]
 sig_df = spark.createDataFrame(
     [tuple(r) for r in base_pd[cols].itertuples(index=False)],
     "chain STRING, store_id STRING, store_name STRING, address STRING, city_name_resolved STRING, "
     "district_name STRING, days_observed INT, median_products DOUBLE, chain_ratio DOUBLE, "
     "size_by_count STRING, size_by_count_reason STRING, store_format_flag STRING, location_type STRING, "
-    "location_keyword STRING, location_other_matches STRING, format_label STRING, label_size STRING")
+    "location_keyword STRING, location_other_matches STRING, format_label STRING, label_size STRING, size_bucket STRING, size_rule STRING, size_basis STRING")
 sig_df.createOrReplaceTempView("store_size_signals_new")
 spark.sql("""
 CREATE OR REPLACE TABLE workspace.silver.store_size_signals
-COMMENT 'Helper for gold.dim_store: two store-size signals per physical store (Shufersal Be excluded): product count within the chain (30-day median, valid-split gap rule; suspect = fewer than 5 days of files) and location keywords, plus the chains own format label, a produce flag and the resolved city. Decides nothing.'
+COMMENT 'Helper for gold.dim_store: two store-size signals per physical store (Shufersal Be excluded): product count within the chain (30-day median, valid-split gap rule; suspect = fewer than 5 days of files) and location keywords, plus the chains own format label, a produce flag and the resolved city. size_bucket (small, medium or large) is the final size by ordered rules per chain (rule id in size_rule, what decided it in size_basis); the other columns are diagnostics.'
 AS SELECT * FROM store_size_signals_new
 """)
 
