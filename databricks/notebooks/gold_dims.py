@@ -147,6 +147,7 @@ SELECT
   i.item_key                       AS product_key,
   i.item_scope,
   i.item_code,
+  i.is_gs1_barcode,
   i.chain,
   i.item_name                      AS product_name,
   i.manufacturer_name              AS manufacturer,

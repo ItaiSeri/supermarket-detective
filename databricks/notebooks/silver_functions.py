@@ -143,3 +143,38 @@ SELECT
 print(key_test)
 assert (key_test.chain_only, key_test.barcode_13, key_test.item_type_1, key_test.scope_barcode) == \
        ("KESHET:6438", "7290107280679", "12345", "shared")
+
+# COMMAND ----------
+
+# GS1 barcode flag (decided 2026-11-19). item_key and item_scope are deliberately NOT changed by it. Cross-chain
+# comparisons and baskets use only items where is_gs1_barcode is true: in-store codes 7290000000xxx are reused by
+# different chains for different products, and in-store codes (mostly weighed meat and fish) fail the check digit.
+# True when the code is 8, 12 or 13 digits, does not start with 7290000000, and its GS1 mod-10 check digit is valid
+# (EAN-13, EAN-8, UPC-A 12 digits: from the right, skipping the check digit, weights 3,1,3,1,...).
+spark.sql(r"""
+CREATE OR REPLACE FUNCTION workspace.silver.is_gs1_barcode(item_code STRING)
+RETURNS BOOLEAN
+COMMENT 'True for an 8/12/13-digit code not starting with 7290000000 whose GS1 mod-10 check digit is valid'
+RETURN coalesce(
+  item_code RLIKE '^([0-9]{8}|[0-9]{12,13})$'
+  AND NOT item_code LIKE '7290000000%'
+  AND (10 - (aggregate(
+        transform(sequence(0, length(item_code) - 2),
+                  i -> CAST(substr(reverse(item_code), i + 2, 1) AS INT) * IF(i % 2 = 0, 3, 1)),
+        0, (a, x) -> a + x) % 10)) % 10 = CAST(substr(item_code, -1) AS INT),
+  false)
+""")
+
+gs1_test = spark.sql("""
+SELECT
+  workspace.silver.is_gs1_barcode('7290107280679') AS real_13,
+  workspace.silver.is_gs1_barcode('80176800')      AS real_8_nutella,
+  workspace.silver.is_gs1_barcode('7290000000249') AS in_store_prefix,
+  workspace.silver.is_gs1_barcode('7290000360741') AS bad_check_digit,
+  workspace.silver.is_gs1_barcode('78013007')      AS bad_check_8,
+  workspace.silver.is_gs1_barcode('374')           AS short_code,
+  workspace.silver.is_gs1_barcode(NULL)            AS null_code
+""").first()
+print(gs1_test)
+assert gs1_test.real_13 and gs1_test.real_8_nutella
+assert not (gs1_test.in_store_prefix or gs1_test.bad_check_digit or gs1_test.bad_check_8 or gs1_test.short_code or gs1_test.null_code)

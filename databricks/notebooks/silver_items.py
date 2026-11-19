@@ -22,10 +22,19 @@ CREATE TABLE IF NOT EXISTS workspace.silver.items (
   last_seen DATE,
   last_file_time STRING,
   last_source_file STRING,
-  bronze_loaded_at TIMESTAMP
+  bronze_loaded_at TIMESTAMP,
+  is_gs1_barcode BOOLEAN
 )
 CLUSTER BY (item_key)
 """)
+
+# COMMAND ----------
+
+# is_gs1_barcode (added 2026-11-19): added to an existing table once, filled for all rows by one UPDATE, so no
+# reload from bronze is needed. The function lives in silver_functions.py. item_key does not use it.
+if "is_gs1_barcode" not in [c.name for c in spark.table("workspace.silver.items").schema.fields]:
+    spark.sql("ALTER TABLE workspace.silver.items ADD COLUMNS (is_gs1_barcode BOOLEAN)")
+    spark.sql("UPDATE workspace.silver.items SET is_gs1_barcode = workspace.silver.is_gs1_barcode(item_code)")
 
 # COMMAND ----------
 
@@ -172,7 +181,8 @@ USING (
     IF(newer, i.last_seen, o.last_seen) AS last_seen,
     IF(newer, i.last_file_time, o.last_file_time) AS last_file_time,
     IF(newer, i.last_source_file, o.last_source_file) AS last_source_file,
-    greatest(i.bronze_loaded_at, coalesce(o.bronze_loaded_at, i.bronze_loaded_at)) AS bronze_loaded_at
+    greatest(i.bronze_loaded_at, coalesce(o.bronze_loaded_at, i.bronze_loaded_at)) AS bronze_loaded_at,
+    workspace.silver.is_gs1_barcode(i.item_code) AS is_gs1_barcode
   FROM (
     SELECT i.*,
       o.item_key IS NULL OR struct(i.last_seen, i.last_file_time) >= struct(o.last_seen, o.last_file_time) AS newer,

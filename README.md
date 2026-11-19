@@ -417,12 +417,15 @@ Managed Delta table, clustered by `item_key`, built by `databricks/notebooks/sil
 - `ItemType` 1 codes shorter than 8 digits: 660 codes, every one in a single chain, so no false merge.
 - `ItemType` changes over time within one chain for 13 pairs (0.005%). If the new type moves the code to another scope, the product gets a second row. Not handled.
 
+**GS1 barcode flag (added November 19th, 2026).** `is_gs1_barcode` is true when the code is 8, 12 or 13 digits, does not start with `7290000000`, and its GS1 mod-10 check digit is valid (EAN-13, EAN-8, UPC-A). **Cross-chain comparisons and baskets must use only items with `is_gs1_barcode = true`.** Why: chains reuse in-store codes of the form `7290000000xxx` for different products (656 shared items start with it), and about 9.7k shared codes have a barcode shape but fail the check digit, mostly weighed meat and fish with in-store codes (`7290000360741` is sheep ribs in Carrefour). `item_key` and `item_scope` are deliberately unchanged: changing them would rename keys and orphan the category rows. The column was added to the existing table with an `ALTER TABLE` and one `UPDATE`, with no reload from bronze.
+
 **Loading:** incremental. The notebook reads only bronze rows newer than the largest `bronze_loaded_at` in `items`, builds one row per key from them, joins that to the stored row and MERGEs on `item_key`. Attributes come from the latest observation (file date, then file time, then load time) and change only if the new observation is not older than the stored one. `first_seen` and `last_seen` only widen; `chains` and `names` only grow (distinct, sorted). If the table is empty, it is built from all of bronze. A second run reads 0 rows and changes 0.
 
 | Column | Type | Meaning |
 |---|---|---|
 | `item_key` | STRING | Key: `item_code` when `shared`, `chain:item_code` when `chain` |
 | `item_scope` | STRING | `shared` or `chain` |
+| `is_gs1_barcode` | BOOLEAN | True when `item_code` is a real GS1 barcode: 8, 12 or 13 digits, not starting with `7290000000`, valid mod-10 check digit (function `workspace.silver.is_gs1_barcode`). Not part of the key; see the note below |
 | `chain` | STRING | Chain; NULL when `shared` |
 | `item_code` | STRING | Product code as published |
 | `item_type` | STRING | `ItemType` of the latest observation |
@@ -573,10 +576,12 @@ Managed Delta table, clustered by `product_key`, rebuilt in full by `gold_dims.p
 |---|---|---|
 | `product_key` | string | The product key (`silver.items.item_key`) |
 | `item_scope`, `item_code` | string | `shared` or `chain`; the code as published |
+| `is_gs1_barcode` | boolean | Real GS1 barcode (see "GS1 barcode flag" under `silver.items`) |
 | `chain` | string | Only for chain-scoped keys; NULL when shared |
 | `product_name`, `manufacturer`, `country` | string | From `silver.items` (`item_name`, `manufacturer_name`, `manufacture_country`) |
 | `quantity`, `unit_qty`, `unit_of_measure`, `is_weighted` | decimal(12,3), string, string, boolean | Package size, as in silver |
 | `chains_count` | int | Chains that published the product |
+| `is_gs1_barcode` | boolean | As in `silver.items`; use it to pick products for cross-chain comparisons |
 | `first_seen`, `last_seen` | date | First and last file date |
 | `is_active` | boolean | `last_seen` within 14 days of the newest `last_seen` in the table |
 | `category`, `category_group`, `is_food`, `category_confidence`, `category_source` | string, string, boolean, double, string | LEFT JOIN to `silver.product_categories`; all NULL until step G1e fills that table (the pilot table is not joined) |
