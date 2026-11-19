@@ -122,7 +122,7 @@ checks = [
      None, 0, "A row in price_obs has no store or product code"),
     ("reject_percent", "row",
      f"SELECT 100.0 * q.n / (q.n + p.n) FROM (SELECT count(*) AS n FROM {Q} WHERE file_date = DATE'{latest}') q, (SELECT count(*) AS n FROM {P} WHERE file_date = DATE'{latest}') p",
-     0.1, 5, "Percent of the latest day's rows that were rejected"),
+     0.25, 5, "Percent of the latest day's rows that were rejected (baseline ~0.10 since 2026-11-19, when absurd and placeholder prices moved into quarantine)"),
     ("files_not_readable", "file",
      f"SELECT count(DISTINCT source_file) FROM {Q} WHERE reject_reason = 'file_not_readable' AND source = 'scraper' AND collected_date = DATE'{collected}'",
      0, None, "Files from the latest collection that could not be parsed"),

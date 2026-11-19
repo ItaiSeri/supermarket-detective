@@ -466,7 +466,7 @@ Managed Delta table, written by `databricks/notebooks/silver_dq.py` (job `silver
 | `repeated_keys` | row | - | 0 | 0, PASS |
 | `bad_prices` | row | - | 0 | 0, PASS |
 | `missing_keys` | row | - | 0 | 0, PASS |
-| `reject_percent` | row | 0.1 | 5 | 0.006, PASS |
+| `reject_percent` | row | 0.25 | 5 | 0.006 until 2026-11-19, then ~0.103 (placeholder and absurd prices now quarantined), PASS |
 | `files_not_readable` | file | 0 | - | 0, PASS |
 | `wrong_chain_rows` | file | 0 | - | 2,365, WARNING |
 | `stores_without_record` | business | 0 | - | 56, WARNING |
