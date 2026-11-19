@@ -23,6 +23,7 @@ I = "workspace.silver.items"
 PO = "workspace.silver.promotion_obs"
 PQ = "workspace.silver.promotion_quarantine"
 SW = "workspace.silver.store_wide_promotions"
+PF = "workspace.silver.price_flags"
 
 # The daily checks look at our own collection: Kaggle history rows (source = 'kaggle') are older days and
 # must neither move "the latest day" nor count in the collection checks.
@@ -182,6 +183,12 @@ checks = [
     ("store_wide_promotions_latest", "business",
      f"SELECT coalesce(max(n), 0) FROM (SELECT count(DISTINCT promotion_id) AS n FROM {SW} WHERE file_date = DATE'{promo_latest}' AND source = 'scraper' GROUP BY chain)",
      20, None, "Most distinct store-wide promotions (more than 10,000 products in one file) any chain had on the latest promotion day"),
+    ("price_absurd_or_placeholder", "row",
+     f"SELECT count(*) FROM {PF} WHERE file_date = DATE'{latest}' AND action = 'exclude'",
+     0, None, "Rows of the latest day with a price of 50,000 or more or below 0.10 (flagged 'exclude' in price_flags; price_obs keeps them, gold leaves them out)"),
+    ("price_chain_outlier", "business",
+     f"SELECT count(*) FROM {PF} WHERE file_date = DATE'{latest}' AND action = 'observe'",
+     200, None, "Rows of the latest day priced 10 times above or below the same chain's median for that product in at least 5 stores (flagged 'observe' in price_flags; listed only)"),
 ]
 
 # COMMAND ----------

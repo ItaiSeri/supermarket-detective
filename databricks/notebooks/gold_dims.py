@@ -1,10 +1,12 @@
 # Databricks notebook source
 # Gold dimensions (milestone 4, step G1). Marts read only the star (docs/architecture.html, gold layer section).
-# This notebook holds the dimensions: dim_date and dim_product now; dim_store is added in a later step.
+# This notebook holds the dimensions: dim_date, dim_product and dim_store.
 #
 #   dim_date     TABLE  one row per day, 2024-09-01 .. 2027-12-31, holidays from a seed file,
 #                       plus how many chains have prices on each day (the reason it is rebuilt every run)
 #   dim_product  TABLE  one row per product (silver.items) + category columns from silver.product_categories
+#   dim_store    TABLE  one row per physical store (silver.stores + silver.store_size_signals), no Shufersal Be,
+#                       no Hazi Hinam produce stores
 
 spark.sql("CREATE SCHEMA IF NOT EXISTS workspace.gold")
 
@@ -174,3 +176,48 @@ n, distinct_n, active = spark.sql(
 assert n == n_items, f"dim_product has {n} rows, silver.items has {n_items}"
 assert n == distinct_n, f"dim_product has repeated product_key: {n} rows, {distinct_n} distinct"
 print(f"dim_product: {n} rows, {active} active")
+
+
+# COMMAND ----------
+
+# dim_store: one row per physical store. store_key = chain:store_id, the same key the facts build.
+# Scope: silver.store_size_signals already holds only physical stores without Shufersal Be (chain SHUFERSAL,
+# sub_chain_id 5), so an inner join gives that scope; Hazi Hinam produce stores (store_format_flag = 'produce')
+# are removed here. The facts keep only stores found in this table. size_bucket is NULL where the size rules
+# had no data. No chain-name column: no chain name mapping exists in silver or the notebooks.
+spark.sql("""
+CREATE OR REPLACE TABLE workspace.gold.dim_store
+COMMENT 'One row per physical store (Shufersal Be and Hazi Hinam produce stores left out). Key chain:store_id. City, district and Eilat flag from silver.stores; size from silver.store_size_signals.'
+AS
+SELECT
+  concat(s.chain, ':', s.store_id) AS store_key,
+  s.chain,
+  s.sub_chain_id,
+  s.store_id,
+  s.store_name,
+  s.address,
+  s.city_code_resolved             AS city_code,
+  s.city_name_resolved             AS city_name,
+  s.city_name_en,
+  s.district_name                  AS district,
+  coalesce(s.city_code_resolved = 2600, false) AS is_eilat,
+  s.store_type,
+  g.size_bucket,
+  g.size_rule,
+  g.size_basis
+FROM workspace.silver.stores s
+JOIN workspace.silver.store_size_signals g ON g.chain = s.chain AND g.store_id = s.store_id
+WHERE s.is_physical
+  AND NOT (s.chain = 'SHUFERSAL' AND coalesce(s.sub_chain_id, '') = '5')
+  AND coalesce(g.store_format_flag, '') <> 'produce'
+""")
+
+# COMMAND ----------
+
+n, distinct_n, be, eilat = spark.sql("""
+SELECT count(*), count(DISTINCT store_key),
+       count_if(chain = 'SHUFERSAL' AND sub_chain_id = '5'), count_if(is_eilat)
+FROM workspace.gold.dim_store""").first()
+assert n == distinct_n, f"dim_store has repeated store_key: {n} rows, {distinct_n} distinct"
+assert be == 0, f"dim_store has {be} Shufersal Be stores"
+print(f"dim_store: {n} rows, {eilat} in Eilat")
