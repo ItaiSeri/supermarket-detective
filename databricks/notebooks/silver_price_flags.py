@@ -1,18 +1,16 @@
 # Databricks notebook source
-# Price flags (cleansing: "flag, don't delete"). One row per suspicious scraper observation of the last 14 file
-# dates; price_obs itself is never changed. Rebuilt in full each run.
-#   absurd_high        price >= 50,000                                  action exclude
-#   placeholder_low    price < 0.10 (chains publish 0.01 as a filler)   action exclude
-#   chain_outlier_high price >= 10x the chain's median for that item    action observe (needs >= 5 stores)
-#   chain_outlier_low  price <= 0.1x the chain's median for that item   action observe (needs >= 5 stores)
+# Price flags: suspicious-but-unproven prices, "flag, don't delete". One row per flagged scraper observation of
+# the last 14 file dates; price_obs is never changed. Rebuilt in full each run. Observe mode: listed only.
+#   chain_outlier_high price >= 10x the chain's median for that item (needs >= 5 stores that day)
+#   chain_outlier_low  price <= 0.1x the chain's median for that item (needs >= 5 stores that day)
+# Provably wrong prices (>= 50,000 or < 0.10) are not flagged here: silver_price_obs sends them to quarantine.
 # The median is taken within the same chain only: internal produce/deli codes (7290000000xxx) are reused by
 # different chains for different products, so a median across chains would flag good prices.
-# 'exclude' rows are left out of gold's price facts; 'observe' rows are only listed (observe mode first).
-# If several rules hit one row, the first in the order above is kept.
+# The table has no action column: every row is 'observe'.
 
 spark.sql("""
 CREATE OR REPLACE TABLE workspace.silver.price_flags
-COMMENT 'Suspicious scraper prices of the last 14 file dates, one row per flagged observation. action exclude = left out of gold price facts; observe = listed only. price_obs is not changed. Rebuilt every run.'
+COMMENT 'Scraper prices of the last 14 file dates that are 10x above or below the same chain median for the item (at least 5 stores). Observe only: price_obs is not changed. Rebuilt every run.'
 AS
 WITH recent AS (
   SELECT chain, store_id, item_code, file_date, price
@@ -36,15 +34,12 @@ scored AS (
 ),
 flagged AS (
   SELECT *,
-    CASE WHEN price >= 50000 THEN 'absurd_high'
-         WHEN price < 0.10 THEN 'placeholder_low'
-         WHEN ratio >= 10 AND stores_in_chain >= 5 THEN 'chain_outlier_high'
+    CASE WHEN ratio >= 10 AND stores_in_chain >= 5 THEN 'chain_outlier_high'
          WHEN ratio <= 0.1 AND stores_in_chain >= 5 THEN 'chain_outlier_low'
     END AS flag_reason
   FROM scored
 )
-SELECT chain, store_id, item_code, file_date, price, chain_median, stores_in_chain, ratio, flag_reason,
-       CASE WHEN flag_reason IN ('absurd_high', 'placeholder_low') THEN 'exclude' ELSE 'observe' END AS action
+SELECT chain, store_id, item_code, file_date, price, chain_median, stores_in_chain, ratio, flag_reason
 FROM flagged
 WHERE flag_reason IS NOT NULL
 """)
@@ -55,4 +50,4 @@ n, distinct_n = spark.sql(
     "SELECT count(*), count(DISTINCT chain, store_id, item_code, file_date) FROM workspace.silver.price_flags").first()
 assert n == distinct_n, f"price_flags has repeated keys: {n} rows, {distinct_n} distinct"
 print(f"price_flags: {n} rows")
-spark.sql("SELECT flag_reason, action, count(*) AS n FROM workspace.silver.price_flags GROUP BY ALL ORDER BY n DESC").show()
+spark.sql("SELECT flag_reason, count(*) AS n FROM workspace.silver.price_flags GROUP BY ALL ORDER BY n DESC").show()

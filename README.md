@@ -264,7 +264,7 @@ Managed Delta table, written by `silver_price_obs.py`. One row per rejected bron
 | Column | Type | Meaning |
 |---|---|---|
 | `row_key` | STRING | SHA-256 of the file path, the row's values and any parse error |
-| `reject_reason` | STRING | `file_not_readable`, `duplicate_column_conflict` (Kaggle: a repeated header name filled with different values, see "A header that repeats a name"), `wrong_chain`, `no_file_date`, `no_store_id`, `no_item_code`, `price_not_a_number` or `price_zero_or_less` |
+| `reject_reason` | STRING | `file_not_readable`, `duplicate_column_conflict` (Kaggle: a repeated header name filled with different values, see "A header that repeats a name"), `wrong_chain`, `no_file_date`, `no_store_id`, `no_item_code`, `price_not_a_number`, `price_zero_or_less`, `absurd_high` (price of 50,000 or more) or `placeholder_low` (price above 0 and below 0.10; chains publish 0.01 as a filler) |
 | `chain` | STRING | Chain, from the S3 folder |
 | `source` | STRING | `scraper` or `kaggle` |
 | `chain_id` | STRING | Chain ID published in the file |
@@ -282,6 +282,8 @@ Managed Delta table, written by `silver_price_obs.py`. One row per rejected bron
 | `quarantined_at` | TIMESTAMP | When the row was saved here |
 
 Checked 2026-11-10: 6,798 rows (2,068 `price_zero_or_less`, 4,730 `wrong_chain`), which with kept rows and repeats adds up to bronze.
+
+**Where cleaning happens (principle, decided November 19th, 2026).** Provably wrong values are cleaned in silver and go to quarantine: they never enter `price_obs`, `price_history` or gold. Suspicious but unproven values are flagged in silver (`price_flags`, observe mode) and left in place. Business scope, meaning which stores and products an analysis uses, lives in gold (`dim_store` leaves out Shufersal Be and Hazi Hinam produce stores). Gold does no price cleaning. `absurd_high` and `placeholder_low` rows loaded before the rules existed were moved once by the notebook's `apply_price_rules_backfill = yes` cell; those moved rows have no `header` / `fields`, and a later re-read of the same bronze row would add a second quarantine row with a different `row_key`.
 
 ### Silver table: `workspace.silver.store_wide_promotions`
 
@@ -476,12 +478,29 @@ Managed Delta table, written by `databricks/notebooks/silver_dq.py` (job `silver
 | `promotion_repeated_keys` | row | - | 0 | 0, PASS |
 | `promotion_reject_percent` | row | 0.1 | 5 | 0.00003, PASS |
 | `promotion_expired_percent` | business | 0.1 | - | 0, PASS |
+| `price_absurd_or_placeholder` | row | 0 | - | new November 19th, 2026; quarantine rows of the latest scraper day with reason `absurd_high` or `placeholder_low` |
+| `price_chain_outlier` | business | 200 | - | new November 19th, 2026; `silver.price_flags` rows of the latest scraper day (baseline measured in the first run, see the log) |
 
 `price_obs_without_item` looks at the latest day only. The limit of 0 on items without a name is measured (0 today), so any missing name shows as a WARNING. The limit of 100 on price jumps comes from one measured day and is provisional. The stop-on-FAIL path has not been seen in a real run yet. The row-count-per-file check (±30% of the 7-day average) is not built yet.
 
 **Price completeness (S6).** A run can report `ok` and still miss files, because the scraper swallows listing timeouts (a Shufersal run once missed 24 of 417 price files). Two checks compare each chain's newest Stores file (on or before the latest price date, physical stores only, as in `silver.stores`) with the stores that have rows in `price_obs` on a date. Measured 2026-11-08 to 2026-11-10 (stores listed, stores missing a price file): Shufersal 416, 1; Rami Levy 98, 0; Carrefour/Yeinot Bitan 144, 60 (about 42% every day, so it is that chain's normal level); Mahsani Ashuk 64, 0 to 1; Victory 67, 0 to 1; Yohananof 50, 3; Keshet 23, 1; Osher Ad 24, 0 to 1; Tiv Taam 47, 0; Hazi Hinam 12, 0. Because each chain has its own normal level, `price_store_completeness` compares a chain with itself: it counts the chains whose missing stores on the latest date exceed the median of the earlier days in the last 7 (days the chain published) by more than 2 stores and more than 3% of its stores, and gives a WARNING above 0. A chain with no earlier day is compared with itself, so it cannot warn on its first day. The Shufersal incident (24 extra missing, 5.8%) would trigger it; a single store of Osher Ad (4%) does not. `chain_without_price_files` is a FAIL above 0: a chain that lists stores but has no price rows at all on the latest date. Limits: "published" means rows in `price_obs`, so a store whose file was rejected completely counts as missing; the latest date is the newest `file_date` in `price_obs`, so a stray file with a later date would make it count every chain as missing.
 
 **Promotion checks.** They use the newest `file_date` in `promotion_obs`. `promotion_repeated_keys` (key `chain` + `store_id` + `promotion_id` + `group_id` + `item_code`, FAIL above 0); `promotion_reject_percent` is `promotion_quarantine` rows over kept plus rejected rows of that day (WARNING above 0.1, FAIL above 5, the same limits as for prices; 3 of 11.3 million rows on 2026-11-10); `promotion_expired_percent` is rows whose `end_at` is before the file date (0 on 2026-11-10, 104 rows or 0.001% on 2026-11-09), WARNING above 0.1 and never FAIL, since a chain may keep an ended promotion in the file. `store_wide_promotions_latest` is the most distinct store-wide promotions any chain had on that day (WARNING above 20, never FAIL).
+
+### Silver table: `workspace.silver.price_flags`
+
+Managed Delta table, rebuilt in full (`CREATE OR REPLACE`) by `databricks/notebooks/silver_price_flags.py` (job `silver_load`, task `build_price_flags`, after `build_price_obs`; `build_dq` and `log_run` wait for it). One row per suspicious scraper observation of the last 14 file dates. **Observe mode:** rows are only listed, nothing is removed anywhere; Itai decides after a week of looking whether to enforce. The comparison is within the same chain only, because internal produce and deli codes (`7290000000xxx`) are reused by different chains for different products, so a median across chains flags good prices. There is no `action` column: every row is observe.
+
+| Column | Type | Meaning |
+|---|---|---|
+| `chain`, `store_id`, `item_code`, `file_date` | string, string, string, date | The observation (unique) |
+| `price` | decimal(10,2) | The price |
+| `chain_median` | double | Median price of that `item_code` across the chain's stores that day |
+| `stores_in_chain` | long | Stores of the chain with the item that day |
+| `ratio` | double | `price` / `chain_median` |
+| `flag_reason` | string | `chain_outlier_high` (ratio 10 or more) or `chain_outlier_low` (ratio 0.1 or less); both need `stores_in_chain` of 5 or more |
+
+Provably wrong prices (50,000 or more, or below 0.10) are not here: they are quarantined (see "Where cleaning happens" under `quarantine`).
 
 ### Silver tables: `workspace.silver.product_categories` and `product_categories_pilot`
 
@@ -497,13 +516,13 @@ Run on November 17th, 2026: 1,000 rows, 0 errors, the classification statement t
 
 ## Gold: the star (milestone 4)
 
-Design, lineage and the questions it answers: the "Gold layer design" section of `docs/architecture.html` (claude.ai/artifact/6fuqxaVS7aWoaqWakoTAUV). Built by `databricks/notebooks/gold_facts.py` (facts) and `gold_dims.py` (dimensions), job `gold_load` (tasks `build_facts`, `build_dims`, `log_run`; the two builds are independent), which `daily_load` starts after `silver_load` succeeds, so a DQ FAIL in silver stops gold. Rule: a fact is a stored table only when building it changes the grain; otherwise it is a view over silver. Marts read only the star.
+Design, lineage and the questions it answers: the "Gold layer design" section of `docs/architecture.html` (claude.ai/artifact/6fuqxaVS7aWoaqWakoTAUV). Built by `databricks/notebooks/gold_facts.py` (facts) and `gold_dims.py` (dimensions), job `gold_load` (tasks `build_dims`, then `build_facts`, then `log_run`; the facts keep only stores found in `dim_store`), which `daily_load` starts after `silver_load` succeeds, so a DQ FAIL in silver stops gold. Rule: a fact is a stored table only when building it changes the grain; otherwise it is a view over silver. Marts read only the star.
 
 **Product key rule:** SQL functions `workspace.silver.item_scope(item_code, item_type)` and `workspace.silver.item_key(chain, item_code, item_type)`, created by `silver_functions.py` (with a self-test). `silver_items` and gold both call them, so the S5 rule lives once: the code itself when shared (ItemType 1, or 8/12/13 digits), else `CHAIN:code`. `store_key` = `CHAIN:store_id`.
 
 ### Gold view: `workspace.gold.fact_price_period`
 
-View over `silver.price_history`, one row per store × product × price period. Columns: `store_key`, `product_key`, `price`, `unit_price`, `quantity`, `unit_of_measure`, `is_weighted`, `valid_from` (= `first_seen`), `valid_to` (= `last_seen`), `days_observed`, `is_current`. Checked 2026-11-17: 110,590,696 rows, the same as silver.
+View over `silver.price_history`, one row per store × product × price period. Columns: `store_key`, `product_key`, `price`, `unit_price`, `quantity`, `unit_of_measure`, `is_weighted`, `valid_from` (= `first_seen`), `valid_to` (= `last_seen`), `days_observed`, `is_current`. Checked 2026-11-17: 110,590,696 rows, the same as silver. Since November 19th, 2026 it keeps only stores that are in `dim_store` (an inner join, so Shufersal Be and produce stores are out, and so are price-publishing stores with no Stores record); the same filter applies to `fact_promotion_period`. No price filter: bad prices are quarantined in silver.
 
 ### Gold table: `workspace.gold.fact_promotion_period`
 
@@ -558,6 +577,20 @@ Managed Delta table, clustered by `product_key`, rebuilt in full by `gold_dims.p
 | `category`, `category_group`, `is_food`, `category_confidence`, `category_source` | string, string, boolean, double, string | LEFT JOIN to `silver.product_categories`; all NULL until step G1e fills that table (the pilot table is not joined) |
 
 Checked November 17th, 2026: 324,565 rows (296,607 shared), 127,414 active, 0 with a category.
+
+### Gold table: `workspace.gold.dim_store`
+
+Managed Delta table, rebuilt in full by `gold_dims.py` (task `build_dims`). One row per physical store: `silver.stores` joined to `silver.store_size_signals` on `chain` + `store_id`. **Scope:** physical stores only (`is_physical`), without Shufersal Be (`chain = 'SHUFERSAL'` and `sub_chain_id = '5'`) and without Hazi Hinam produce stores (`store_format_flag = 'produce'`). The notebook stops if `store_key` repeats or a Be store is present. No chain-name column: no chain name mapping exists yet.
+
+| Column | Type | Meaning |
+|---|---|---|
+| `store_key` | string | `chain:store_id`, the key the facts use |
+| `chain`, `sub_chain_id`, `store_id` | string | As in `silver.stores` |
+| `store_name`, `address` | string | As published |
+| `city_code`, `city_name`, `city_name_en`, `district` | int, string, string, string | `city_code_resolved`, `city_name_resolved`, `city_name_en`, `district_name` of `silver.stores` |
+| `is_eilat` | boolean | `city_code = 2600` |
+| `store_type` | string | Published `StoreType` |
+| `size_bucket`, `size_rule`, `size_basis` | string | Final size, rule id and what decided it, from `silver.store_size_signals`; `size_bucket` is NULL where the rules had no data |
 
 ### Silver table: `workspace.silver.store_size_signals`
 

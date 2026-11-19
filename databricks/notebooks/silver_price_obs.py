@@ -177,6 +177,9 @@ SELECT *,
     WHEN item_code IS NULL THEN 'no_item_code'
     WHEN price IS NULL THEN 'price_not_a_number'
     WHEN price <= 0 THEN 'price_zero_or_less'
+    -- provably wrong values (2026-11-19): one Osher Ad row had 72,900,117.25; chains publish 0.01 as a filler
+    WHEN price >= 50000 THEN 'absurd_high'
+    WHEN price < 0.10 THEN 'placeholder_low'
   END AS reject_reason
 FROM base_ok
 """, args={"last_load": last_load, "reload_chain": reload_chain})
@@ -225,3 +228,34 @@ WHEN MATCHED AND (
 ) THEN UPDATE SET *
 WHEN NOT MATCHED THEN INSERT *
 """)
+
+
+# COMMAND ----------
+
+# One-off cleanup after the two price rules above were added (2026-11-19): move rows already in price_obs that
+# match them (all dates, all sources) to quarantine and delete them from price_obs. Run once with
+# apply_price_rules_backfill = yes; running it again moves nothing (the quarantine MERGE skips known rows and
+# the DELETE finds nothing). The moved rows have no header / fields (price_obs does not keep them).
+dbutils.widgets.text("apply_price_rules_backfill", "")
+if dbutils.widgets.get("apply_price_rules_backfill").lower() == "yes":
+    rule = "(price >= 50000 OR (price > 0 AND price < 0.10))"
+    to_move = spark.sql(f"SELECT count(*) FROM workspace.silver.price_obs WHERE {rule}").first()[0]
+    spark.sql(f"""
+    MERGE INTO workspace.silver.quarantine AS t
+    USING (
+      SELECT sha2(concat_ws('|', 'price_rule_backfill', chain, source, store_id, item_code, file_date, source_file), 256) AS row_key,
+             CASE WHEN price >= 50000 THEN 'absurd_high' ELSE 'placeholder_low' END AS reject_reason,
+             chain, source, chain_id, store_id, item_code, CAST(price AS STRING) AS price_raw,
+             CAST(NULL AS STRING) AS parse_error, file_date, source_file, collected_date, modified_at, bronze_loaded_at,
+             CAST(NULL AS MAP<STRING, STRING>) AS header, CAST(NULL AS MAP<STRING, STRING>) AS fields,
+             current_timestamp() AS quarantined_at
+      FROM workspace.silver.price_obs
+      WHERE {rule}
+    ) AS s
+    ON t.row_key = s.row_key
+    WHEN NOT MATCHED THEN INSERT *
+    """)
+    spark.sql(f"DELETE FROM workspace.silver.price_obs WHERE {rule}")
+    left = spark.sql(f"SELECT count(*) FROM workspace.silver.price_obs WHERE {rule}").first()[0]
+    print(f"price rules backfill: {to_move} rows moved from price_obs to quarantine, {left} left in price_obs")
+    assert left == 0

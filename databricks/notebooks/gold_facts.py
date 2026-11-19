@@ -7,9 +7,8 @@
 # Store-wide promotions (coupons, donations, delivery fees; silver.store_wide_promotions) are not in gold:
 # decided by Itai 2026-11-17, they are not deals on products.
 # Both facts keep only stores that are in gold.dim_store (physical, no Shufersal Be, no produce stores), so facts
-# and dimension agree; gold_load builds dim_store first. fact_price_period also leaves out a price period when
-# silver.price_flags has an 'exclude' row (absurd or placeholder price) for the same store and product, the same
-# price and a date inside the period. Flags cover only the last 14 days, so older bad prices are not caught yet.
+# and dimension agree; gold_load builds dim_store first. That is business scope. Gold does no price cleaning:
+# provably wrong prices are quarantined in silver (silver_price_obs) and never reach price_history.
 
 spark.sql("CREATE SCHEMA IF NOT EXISTS workspace.gold")
 spark.sql("DROP VIEW IF EXISTS workspace.gold.fact_store_wide_promo")
@@ -35,9 +34,6 @@ SELECT
   h.is_current
 FROM workspace.silver.price_history h
 JOIN workspace.gold.dim_store d ON d.chain = h.chain AND d.store_id = h.store_id
-LEFT ANTI JOIN (SELECT * FROM workspace.silver.price_flags WHERE action = 'exclude') f
-  ON f.chain = h.chain AND f.store_id = h.store_id AND f.item_code = h.item_code AND f.price = h.price
- AND f.file_date BETWEEN h.first_seen AND h.last_seen
 """)
 
 # COMMAND ----------
@@ -106,7 +102,7 @@ FROM deals
 # COMMAND ----------
 
 # Reconciliation: every daily row of silver (for stores in dim_store) is in exactly one deal row, and the price
-# view loses only what it is meant to drop: stores outside dim_store and periods with an 'exclude' flag.
+# view loses only stores outside dim_store.
 check = spark.sql("""
 SELECT
   (SELECT sum(days_observed) FROM workspace.gold.fact_promotion_period) AS promo_days_gold,
@@ -119,4 +115,4 @@ SELECT
 """).first()
 print(check)
 assert check.promo_days_gold == check.promo_rows_silver, "fact_promotion_period does not add up to promotion_obs"
-assert check.price_periods_gold <= check.price_periods_in_scope, "fact_price_period has more rows than silver.price_history"
+assert check.price_periods_gold == check.price_periods_in_scope, "fact_price_period does not match price_history for stores in dim_store"

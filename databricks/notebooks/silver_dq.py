@@ -184,11 +184,11 @@ checks = [
      f"SELECT coalesce(max(n), 0) FROM (SELECT count(DISTINCT promotion_id) AS n FROM {SW} WHERE file_date = DATE'{promo_latest}' AND source = 'scraper' GROUP BY chain)",
      20, None, "Most distinct store-wide promotions (more than 10,000 products in one file) any chain had on the latest promotion day"),
     ("price_absurd_or_placeholder", "row",
-     f"SELECT count(*) FROM {PF} WHERE file_date = DATE'{latest}' AND action = 'exclude'",
-     0, None, "Rows of the latest day with a price of 50,000 or more or below 0.10 (flagged 'exclude' in price_flags; price_obs keeps them, gold leaves them out)"),
+     f"SELECT count(*) FROM {Q} WHERE reject_reason IN ('absurd_high', 'placeholder_low') AND source = 'scraper' AND file_date = DATE'{latest}'",
+     0, None, "Rows of the latest day quarantined for a price of 50,000 or more (absurd_high) or between 0 and 0.10 (placeholder_low)"),
     ("price_chain_outlier", "business",
-     f"SELECT count(*) FROM {PF} WHERE file_date = DATE'{latest}' AND action = 'observe'",
-     200, None, "Rows of the latest day priced 10 times above or below the same chain's median for that product in at least 5 stores (flagged 'observe' in price_flags; listed only)"),
+     f"SELECT count(*) FROM {PF} WHERE file_date = DATE'{latest}'",
+     200, None, "Rows of the latest day priced 10 times above or below the same chain's median for that product in at least 5 stores (listed in price_flags, observe only)"),
 ]
 
 # COMMAND ----------
