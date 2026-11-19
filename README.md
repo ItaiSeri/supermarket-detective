@@ -196,7 +196,7 @@ Managed Delta table, rebuilt in full on each run by `databricks/notebooks/silver
 | `city_source` | STRING | Which rule found the city: `code`, `code_alias`, `name`, `store_name`, `address`, or `none` |
 | `zip_code` | STRING | ZIP as published; NULL if empty or all zeros |
 | `store_type` | STRING | `StoreType` as published |
-| `is_physical` | BOOLEAN | `store_type` is `1`; never NULL |
+| `is_physical` | BOOLEAN | `store_type` is `1` (physical) or `3` (physical + online); never NULL |
 | `is_eilat` | BOOLEAN | Physical store in Eilat, by the Eilat rule below; never NULL |
 | `last_file_date` | DATE | Date of the file this row came from |
 | `source_file` | STRING | Full S3 path of that file |
@@ -205,7 +205,7 @@ Checked 2026-11-10: 974 stores, 945 physical, 13 in Eilat, no repeated key. The 
 
 Assumptions, not official definitions:
 
-- **`StoreType` 1 means a physical store.** It excludes every online store found so far, but the codes' official meaning isn't confirmed.
+- **`StoreType` 1 or 3 means a physical store** (1 = physical, 2 = online, 3 = both). Until 2026-11-19 only 1 counted, which dropped 6 real stores (Victory Lod פסח לב, 2 Keshet, 3 Mahsani Ashuk); confirmed by Itai for the Victory store. Type 2 rows are all online/delivery/picking stores.
 - **The Eilat rule** (`City` or a ZIP starting with `88`) is ours. Its 13 stores match the count made separately from the chains' files.
 - **`city_code` is the CBS locality code** for the chains that publish a number; `city_code_resolved` checks it against the CBS list (seed below) instead of trusting it.
 

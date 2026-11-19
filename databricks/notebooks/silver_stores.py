@@ -32,7 +32,7 @@ latest AS (
   FROM parsed
 ),
 flagged AS (
-  SELECT *, coalesce(store_type = '1', false) AS is_physical
+  SELECT *, coalesce(store_type IN ('1', '3'), false) AS is_physical  -- 1 = physical, 2 = online, 3 = both
   FROM latest
   WHERE rn = 1
 )
