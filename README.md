@@ -478,7 +478,7 @@ Managed Delta table, written by `databricks/notebooks/silver_dq.py` (job `silver
 | `promotion_repeated_keys` | row | - | 0 | 0, PASS |
 | `promotion_reject_percent` | row | 0.1 | 5 | 0.00003, PASS |
 | `promotion_expired_percent` | business | 0.1 | - | 0, PASS |
-| `price_absurd_or_placeholder` | row | 0 | - | new November 19th, 2026; quarantine rows of the latest scraper day with reason `absurd_high` or `placeholder_low` |
+| `price_absurd_or_placeholder` | row | 15000 | - | new November 19th, 2026; baseline about 7,250 a day of 0.01 placeholders; quarantine rows of the latest scraper day with reason `absurd_high` or `placeholder_low` |
 | `price_chain_outlier` | business | 200 | - | new November 19th, 2026; `silver.price_flags` rows of the latest scraper day (baseline measured in the first run, see the log) |
 
 `price_obs_without_item` looks at the latest day only. The limit of 0 on items without a name is measured (0 today), so any missing name shows as a WARNING. The limit of 100 on price jumps comes from one measured day and is provisional. The stop-on-FAIL path has not been seen in a real run yet. The row-count-per-file check (±30% of the 7-day average) is not built yet.

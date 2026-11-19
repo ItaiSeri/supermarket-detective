@@ -185,7 +185,7 @@ checks = [
      20, None, "Most distinct store-wide promotions (more than 10,000 products in one file) any chain had on the latest promotion day"),
     ("price_absurd_or_placeholder", "row",
      f"SELECT count(*) FROM {Q} WHERE reject_reason IN ('absurd_high', 'placeholder_low') AND source = 'scraper' AND file_date = DATE'{latest}'",
-     0, None, "Rows of the latest day quarantined for a price of 50,000 or more (absurd_high) or between 0 and 0.10 (placeholder_low)"),
+     15000, None, "Baseline ~7,250 a day (chains publish 0.01 as a placeholder), so WARNING only above about twice that. Rows of the latest day quarantined for a price of 50,000 or more (absurd_high) or between 0 and 0.10 (placeholder_low)"),
     ("price_chain_outlier", "business",
      f"SELECT count(*) FROM {PF} WHERE file_date = DATE'{latest}'",
      200, None, "Rows of the latest day priced 10 times above or below the same chain's median for that product in at least 5 stores (listed in price_flags, observe only)"),
