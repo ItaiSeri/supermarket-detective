@@ -748,9 +748,9 @@ for (const id in B) {
 
 // ---------- gold tables ----------
 const T = [
-  {k:"dim", name:"gold.dim_store", where:"pbi", grain:"one row per <b>chain + store</b>", size:"~975 rows",
-   cols:"store_key (chain:store_id), chain, sub_chain_id, store_id, store_name, address, city_code, <code>city_name</code>, city_name_en, <code>district</code>, is_eilat, store_type, <code>size_bucket</code>, <code>size_rule</code>, <code>size_basis</code>",
-   from:"silver.stores + silver.store_size_signals, physical stores only, without Shufersal Be and Hazi Hinam produce stores (no chain_name_he: no name mapping yet). The facts keep only stores in this table. City from the CBS locality-code table (D6). City field by chain: 6 chains publish a numeric code, Victory and Mahsani Ashuk a Hebrew name, Yohananof and most Keshet stores 0"},
+  {k:"dim", name:"gold.dim_store", where:"pbi", grain:"one row per <b>chain + store</b>", size:"~1,000 rows",
+   cols:"store_key (chain:store_id), chain, sub_chain_id, store_id, store_name, address, city_code, <code>city_name</code>, city_name_en, <code>district</code>, is_eilat, store_type, <code>is_open</code>, <code>first_seen</code>, <code>last_seen</code>, <code>size_bucket</code>, <code>size_rule</code>, <code>size_basis</code>",
+   from:"silver.stores + silver.store_size_signals, physical stores only (open or closed: is_open), without Shufersal Be and Hazi Hinam produce stores (no chain_name_he: no name mapping yet). The facts keep only stores in this table. City from the CBS locality-code table (D6). City field by chain: 6 chains publish a numeric code, Victory and Mahsani Ashuk a Hebrew name, Yohananof and most Keshet stores 0"},
   {k:"dim", name:"gold.dim_product", where:"pbi", grain:"one row per <b>item_key</b> (shared barcode, or chain:code)", size:"~325k rows (Power BI gets only the products used in marts)",
    cols:"product_key, item_scope, item_code, chain, product_name, manufacturer, country, quantity, unit_qty, unit_of_measure, is_weighted, chains_count, first_seen, last_seen, is_active, <code>category</code>, <code>category_group</code>, <code>is_food</code>, <code>category_confidence</code>, <code>category_source</code>",
    from:"silver.items + a LEFT JOIN to silver.product_categories (created empty, filled in G1e; the category columns are NULL until then, see D5). is_active = seen within 14 days of the newest last_seen. Built (G1c).", built:true},

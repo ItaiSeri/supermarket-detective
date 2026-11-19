@@ -142,7 +142,7 @@ if reload_mark:
 
 classified = spark.sql("""
 WITH expected AS (
-  SELECT chain, min(chain_id) AS expected_chain_id
+  SELECT chain, max_by(chain_id, last_file_date) AS expected_chain_id -- newest Stores file = current ID, silver.stores also holds Kaggle history
   FROM workspace.silver.stores
   GROUP BY chain
 ),

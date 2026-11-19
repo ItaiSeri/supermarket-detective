@@ -21,14 +21,22 @@ WITH parsed AS (
     fields['StoreType'] AS store_type,
     to_date(regexp_extract(file_name, '-(20[0-9]{6})', 1), 'yyyyMMdd') AS file_date,
     modified_at,
+    source,
     file_path
   FROM workspace.bronze.stores
-  -- the current store list comes from our own collection only; Kaggle store files (history) stay in bronze
-  WHERE parse_error IS NULL AND source = 'scraper'
+  -- both sources: the scraper's Stores files (current) and Kaggle's (history), so closed or renumbered stores
+  -- that still have price history are here too. Rows without a StoreID are junk.
+  WHERE parse_error IS NULL AND nullif(trim(fields['StoreID']), '') IS NOT NULL
 ),
 latest AS (
+  -- latest version per store; on the same file date the scraper beats Kaggle
   SELECT *,
-    row_number() OVER (PARTITION BY chain, store_id ORDER BY file_date DESC, modified_at DESC) AS rn
+    row_number() OVER (PARTITION BY chain, store_id
+                       ORDER BY file_date DESC, (source = 'scraper') DESC, modified_at DESC) AS rn,
+    min(file_date) OVER (PARTITION BY chain, store_id) AS first_seen,
+    max(file_date) OVER (PARTITION BY chain, store_id) AS last_seen,
+    max(CASE WHEN source = 'scraper' THEN file_date END) OVER (PARTITION BY chain, store_id) AS last_scraper_date,
+    max(CASE WHEN source = 'scraper' THEN file_date END) OVER () AS latest_scraper_date
   FROM parsed
 ),
 flagged AS (
@@ -51,6 +59,10 @@ SELECT
   is_physical,
   is_physical AND coalesce(city_raw IN ('2600', '\u05D0\u05D9\u05DC\u05EA') OR zip_code LIKE '88%', false) AS is_eilat,
   file_date AS last_file_date,
+  first_seen,
+  last_seen,
+  -- open = listed in a scraper Stores file within 14 days of the newest scraper Stores date
+  coalesce(last_scraper_date >= date_sub(latest_scraper_date, 14), false) AS is_open,
   file_path AS source_file
 FROM flagged
 """)
@@ -158,7 +170,7 @@ SELECT
   c.city_name_en,
   c.district_name,
   r.city_source,
-  b.zip_code, b.store_type, b.is_physical, b.is_eilat, b.last_file_date, b.source_file
+  b.zip_code, b.store_type, b.is_physical, b.is_eilat, b.last_file_date, b.first_seen, b.last_seen, b.is_open, b.source_file
 FROM stores_base b
 LEFT JOIN stores_city r ON r.chain = b.chain AND r.store_id = b.store_id
 LEFT JOIN cbs_localities c ON c.city_code_resolved = r.city_code_resolved

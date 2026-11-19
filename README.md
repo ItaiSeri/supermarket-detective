@@ -176,7 +176,7 @@ Wall time per task: `load_kaggle_prices` 208 s, `load_kaggle_promotions` 86 s, `
 
 ### Silver table: `workspace.silver.stores`
 
-Managed Delta table, rebuilt in full on each run by `databricks/notebooks/silver_stores.py` (job `silver_load`, not scheduled yet). One row per `chain` + `store_id`: the store's newest version in `bronze.stores` among our own collection (`source = 'scraper'`), by the date in the file name and then `modified_at`. Older versions of a store aren't kept here; they stay in bronze. Kaggle store files (history) are loaded into `bronze.stores` only, so this table stays the current store list.
+Managed Delta table, rebuilt in full on each run by `databricks/notebooks/silver_stores.py` (job `silver_load`, not scheduled yet). One row per `chain` + `store_id`: the store's newest version in `bronze.stores` from both sources (our scraper and the Kaggle history), by the date in the file name, then scraper before Kaggle, then `modified_at`. Since November 19th, 2026 the table also holds stores that are closed or renumbered and only appear in the Kaggle Stores files, so their price history has a store record; `is_open` tells them apart. Older versions of a store aren't kept here; they stay in bronze.
 
 | Column | Type | Meaning |
 |---|---|---|
@@ -199,9 +199,12 @@ Managed Delta table, rebuilt in full on each run by `databricks/notebooks/silver
 | `is_physical` | BOOLEAN | `store_type` is `1` (physical) or `3` (physical + online); never NULL |
 | `is_eilat` | BOOLEAN | Physical store in Eilat, by the Eilat rule below; never NULL |
 | `last_file_date` | DATE | Date of the file this row came from |
+| `first_seen` | DATE | Date of the oldest Stores file (either source) that lists the store |
+| `last_seen` | DATE | Date of the newest Stores file (either source) that lists the store |
+| `is_open` | BOOLEAN | The store is in a scraper Stores file within 14 days of the newest scraper Stores date; never NULL. A closed store keeps its price history |
 | `source_file` | STRING | Full S3 path of that file |
 
-Checked 2026-11-10: 974 stores, 945 physical, 13 in Eilat, no repeated key. The key needs no sub-chain: adding `sub_chain_id` changes no store count in any of the 10 chains, and no store ID appears twice in a file. 88 stores have neither a city code nor a city name, mostly Yohananof and Keshet.
+Checked 2026-11-10 (before closed stores were added): 974 stores, 945 physical, 13 in Eilat, no repeated key. The key needs no sub-chain: adding `sub_chain_id` changes no store count in any of the 10 chains, and no store ID appears twice in a file. 88 stores have neither a city code nor a city name, mostly Yohananof and Keshet.
 
 Assumptions, not official definitions:
 
@@ -580,7 +583,7 @@ Checked November 17th, 2026: 324,565 rows (296,607 shared), 127,414 active, 0 wi
 
 ### Gold table: `workspace.gold.dim_store`
 
-Managed Delta table, rebuilt in full by `gold_dims.py` (task `build_dims`). One row per physical store: `silver.stores` joined to `silver.store_size_signals` on `chain` + `store_id`. **Scope:** physical stores only (`is_physical`), without Shufersal Be (`chain = 'SHUFERSAL'` and `sub_chain_id = '5'`) and without Hazi Hinam produce stores (`store_format_flag = 'produce'`). The notebook stops if `store_key` repeats or a Be store is present. No chain-name column: no chain name mapping exists yet.
+Managed Delta table, rebuilt in full by `gold_dims.py` (task `build_dims`). One row per physical store, open or closed (`is_open`; since November 19th, 2026 the stores that closed but have price history are in too): `silver.stores` joined to `silver.store_size_signals` on `chain` + `store_id`. **Scope:** physical stores only (`is_physical`), without Shufersal Be (`chain = 'SHUFERSAL'` and `sub_chain_id = '5'`) and without Hazi Hinam produce stores (`store_format_flag = 'produce'`). The notebook stops if `store_key` repeats or a Be store is present. No chain-name column: no chain name mapping exists yet.
 
 | Column | Type | Meaning |
 |---|---|---|
@@ -590,6 +593,7 @@ Managed Delta table, rebuilt in full by `gold_dims.py` (task `build_dims`). One 
 | `city_code`, `city_name`, `city_name_en`, `district` | int, string, string, string | `city_code_resolved`, `city_name_resolved`, `city_name_en`, `district_name` of `silver.stores` |
 | `is_eilat` | boolean | `city_code = 2600` |
 | `store_type` | string | Published `StoreType` |
+| `is_open`, `first_seen`, `last_seen` | boolean, date, date | As in `silver.stores`: in a scraper Stores file in the last 14 days; first and last date of any Stores file that lists the store |
 | `size_bucket`, `size_rule`, `size_basis` | string | Final size, rule id and what decided it, from `silver.store_size_signals`; `size_bucket` is NULL where the rules had no data |
 
 ### Silver table: `workspace.silver.store_size_signals`
@@ -619,6 +623,7 @@ Decided by Itai on November 19th, 2026, after checking the Lod and Ramla stores.
 - **Mahsani Ashuk:** `מחסני השוק` large, `מחסני השוק בשבילך` medium, `מחסני השוק בסיטי` small, `מחסני השוק מהדרין` medium (`format`); no format medium (`chain_default`).
 - **Yohananof:** n of 9,000 or more large, 6,000 or more medium, else small (`count`); an industrial location makes it large; a mall location turns a `large` count into medium (basis `location`); no count: NULL.
 - **Tiv Taam, Keshet:** medium (`chain_default`).
+- **Closed stores** have no product count in the last 30 days: rules that need a count give NULL with basis `no_data`; the other rules (format, chain default) apply as usual.
 - **Anything else:** NULL with rule `R_UNMATCHED` (expected 0 rows; the notebook prints a warning count).
 
 The keyword `עזריאלי` (mall) was added to the seed on November 19th, 2026; its five matches were all stores in Azrieli malls. The non-food signal (items priced over 1,000 shekels) was rejected: chains like Victory list appliances in every branch's file, City stores included, and Shufersal and Osher Ad publish none.

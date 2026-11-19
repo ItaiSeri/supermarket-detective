@@ -55,7 +55,7 @@ print("Reading bronze rows loaded after", last_load)
 # shape of a barcode (8, 12 or 13 digits). Everything else is the chain's own code, so the key adds the chain.
 incoming_obs = spark.sql("""
 WITH expected AS (
-  SELECT chain, min(chain_id) AS expected_chain_id
+  SELECT chain, max_by(chain_id, last_file_date) AS expected_chain_id -- newest Stores file = current ID, silver.stores also holds Kaggle history
   FROM workspace.silver.stores
   GROUP BY chain
 ),

@@ -180,14 +180,14 @@ print(f"dim_product: {n} rows, {active} active")
 
 # COMMAND ----------
 
-# dim_store: one row per physical store. store_key = chain:store_id, the same key the facts build.
+# dim_store: one row per physical store, open or closed (is_open = in a scraper Stores file in the last 14 days). store_key = chain:store_id, the same key the facts build.
 # Scope: silver.store_size_signals already holds only physical stores without Shufersal Be (chain SHUFERSAL,
 # sub_chain_id 5), so an inner join gives that scope; Hazi Hinam produce stores (store_format_flag = 'produce')
 # are removed here. The facts keep only stores found in this table. size_bucket is NULL where the size rules
 # had no data. No chain-name column: no chain name mapping exists in silver or the notebooks.
 spark.sql("""
 CREATE OR REPLACE TABLE workspace.gold.dim_store
-COMMENT 'One row per physical store (Shufersal Be and Hazi Hinam produce stores left out). Key chain:store_id. City, district and Eilat flag from silver.stores; size from silver.store_size_signals.'
+COMMENT 'One row per physical store, open or closed (Shufersal Be and Hazi Hinam produce stores left out). Key chain:store_id. City, district, Eilat flag and is_open / first_seen / last_seen (from the Stores files) from silver.stores; size from silver.store_size_signals.'
 AS
 SELECT
   concat(s.chain, ':', s.store_id) AS store_key,
@@ -202,6 +202,9 @@ SELECT
   s.district_name                  AS district,
   coalesce(s.city_code_resolved = 2600, false) AS is_eilat,
   s.store_type,
+  s.is_open,
+  s.first_seen,
+  s.last_seen,
   g.size_bucket,
   g.size_rule,
   g.size_basis
