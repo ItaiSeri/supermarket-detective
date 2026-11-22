@@ -1,0 +1,17 @@
+basket_name,category,cbs_weight,cbs_groups
+staples_v1,meat_poultry,31.90,בשר בקר; בשר בהמה אחר; עופות; בשר משומר ומעובד
+staples_v1,dairy_eggs,21.43,חלב ומוצרי חלב; ביצים
+staples_v1,sweets_snacks,14.04,סוכר ריבה וממתקים; עוגיות ופלים וביסקוויטים; חטיפים מלוחים; קרקרים ופריכיות; פירות יבשים ואגוזים
+staples_v1,alcohol,10.18,משקאות אלכוהוליים
+staples_v1,grains_pasta_legumes,9.05,קמח; מוצרי בצק; קטניות ומוצרי דגן
+staples_v1,bread_bakery,7.76,לחם; עוגות מוכנות
+staples_v1,personal_care,7.24,צורכי רחצה וקוסמטיקה ללא נייר טואלט וטיפול בתינוק; מוצרים להיגיינת הגוף והפה
+staples_v1,cleaning_laundry,6.28,חומרי כביסה ניקוי והדברה; כלים לניקיון הבית
+staples_v1,fish,5.76,דגים
+staples_v1,soft_drinks,5.48,משקאות קלים
+staples_v1,prepared_other_food,5.44,מוצרי מזון שונים ללא תה קפה ומזון לתינוקות
+staples_v1,paper_disposables,5.06,נייר טואלט ממחטות ומגבונים; כלים חד-פעמיים; צורכי משק בית אחרים
+staples_v1,coffee_tea,3.09,תה; קפה
+staples_v1,oils_fats,2.85,שמנים ומרגרינה
+staples_v1,baby_care,1.44,מוצרים ואביזרים לטיפול בתינוק
+staples_v1,baby_food,1.26,מזון לתינוקות

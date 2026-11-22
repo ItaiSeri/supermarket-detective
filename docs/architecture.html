@@ -649,12 +649,13 @@ a:focus-visible { outline: 2px solid var(--daily); outline-offset: 2px; }
   <ol class="steps">
     <li><b>G0 ✓</b> facts in <code>gold_facts.py</code>, job <code>gold_load</code> after silver in <code>daily_load</code>: view <code>fact_price_period</code> (keys + renames over silver); table <code>fact_promotion_period</code> (full rebuild for now, then incremental: extend or insert). Product key rule is one SQL function, <code>silver.item_key</code>.</li>
     <li><b>G1</b> dimensions: <code>dim_store</code> (with a city table from the CBS locality codes), <code>dim_product</code>, <code>dim_date</code> with Hanukkah and other holidays. Product categories are now part of G1 (G1e: rules + <code>ai_classify</code> on active products, filled into <code>dim_product</code>); the pilot of 1,000 products is done (G1c).</li>
-    <li><b>G2</b> <code>mart_eilat_gap</code>, plus the Carrefour check.</li>
-    <li><b>G3</b> Power BI v1: one page on the Eilat question, Import mode from the SQL warehouse. Then the first X post.</li>
-    <li><b>G4</b> <code>mart_basket_index</code>: cheapest chain by city.</li>
-    <li><b>G5</b> <code>mart_fake_promos</code> and <code>mart_price_moves</code>.</li>
-    <li><b>G6</b> <code>mart_holiday_index</code>, ready before Hanukkah starts on December 4th, 2026.</li>
-    <li><b>G7</b> incremental loads: <code>fact_promotion_period</code> becomes extend-or-insert; marts stay full rebuilds. (<code>gold_load</code> in <code>daily_load</code> was done in G0.)</li>
+    <li><b>G2</b> city and region price index: frozen basket <code>basket_items</code> (<code>staples_v1</code>, CBS weights), <code>fact_price_snapshot</code> (7-day median per store and barcode), views <code>v_store_price_index</code>, <code>v_city_price_index</code>, <code>v_district_price_index</code>; task <code>build_basket</code> in <code>gold_load</code>.</li>
+    <li><b>G3</b> <code>mart_eilat_gap</code>, plus the Carrefour check.</li>
+    <li><b>G4</b> Power BI v1: one page on the Eilat question, Import mode from the SQL warehouse. Then the first X post.</li>
+    <li><b>G5</b> <code>mart_basket_index</code>: cheapest chain by city.</li>
+    <li><b>G6</b> <code>mart_fake_promos</code> and <code>mart_price_moves</code>.</li>
+    <li><b>G7</b> <code>mart_holiday_index</code>, ready before Hanukkah starts on December 4th, 2026.</li>
+    <li><b>G8</b> incremental loads: <code>fact_promotion_period</code> becomes extend-or-insert; marts stay full rebuilds. (<code>gold_load</code> in <code>daily_load</code> was done in G0.)</li>
   </ol>
 </section>
 </section>
@@ -763,6 +764,18 @@ const T = [
   {k:"fact", name:"gold.fact_promotion_period", where:"dbx", grain:"one row per <b>store × promotion × group × product</b>", mat:"table", built:true, size:"23.5M rows from 180M daily rows · stays in Databricks",
    cols:"store_key, product_key, promotion_id, group_id, description, reward_type, min_qty, max_qty, deal_price, deal_unit_price, discount_rate, discount_type, club_code, is_coupon, is_gift_item, allow_multiple_discounts, min_purchase_amount, start_at, end_at, first_seen, last_seen, days_observed, values_changed, source",
    from:"silver.promotion_obs collapsed to one row per deal. A table because it changes the grain. Never split by values (chains re-encode the same deal daily); values from the last day seen, values_changed flags differences. Check: sum(days_observed) = rows in promotion_obs. Full rebuild for now; later incremental: extend or insert."},
+  {k:"dim", name:"gold.basket_items", where:"pbi", grain:"one row per <b>basket product</b> (basket staples_v1)", mat:"table", size:"~390 rows",
+   cols:"basket_name, item_key, item_code, product_name, category, category_weight, stores_on_selection_day, chains_on_selection_day, rank_in_category, selected_on, selection_rule",
+   from:"silver.items (real GS1 barcodes, shared) + price_obs of the latest scraper day + silver.product_categories_ai (model gpt-oss-120b, until dim_product.category is filled) + seed basket_category_weights.csv (CBS CPI weights, January 2025). FROZEN: built once, rebuilt only with notebook parameter rebuild_basket=yes. Up to 25 products per category, carried by 8+ chains and 50%+ of open stores. Step G2."},
+  {k:"fact", name:"gold.fact_price_snapshot", where:"dbx", grain:"one row per <b>open store × real barcode</b>", mat:"table", size:"rebuilt every run · stays in Databricks",
+   cols:"chain, store_id, store_key, item_key, item_code, median_price, days_observed, snapshot_end_date",
+   from:"silver.price_obs (scraper): median shelf price over the last 7 scraper file dates, open physical stores of dim_store, shared GS1 barcodes only. Not basket-specific. Step G2."},
+  {k:"mart", name:"gold.v_store_price_index", where:"pbi", grain:"one row per <b>open store</b>", mat:"view", size:"~900 rows",
+   cols:"store_key, chain, store_id, store_name, city_code, city_name, district, size_bucket, store_index, chain_index, products_priced, categories_priced, weight_covered, low_coverage",
+   from:"fact_price_snapshot + basket_items + dim_store. store_index: price vs the national median per product, median per category, weighted by CBS weights. chain_index: the same vs the chain's own median. low_coverage = weight_covered under 0.6 or under 50 products. Step G2."},
+  {k:"mart", name:"gold.v_city_price_index / gold.v_district_price_index", where:"pbi", grain:"one row per <b>city</b> (or per <b>district</b>)", mat:"view", size:"~150 rows + 6",
+   cols:"city_code, city_name, district, stores, chains_present, avg_store_index (A: where is it cheap to shop), avg_chain_index (B: chain pricing by place), few_stores (under 3 stores)",
+   from:"v_store_price_index, stores with low_coverage = false. Step G2."},
   {k:"mart", name:"gold.mart_eilat_gap", where:"pbi", grain:"one row per <b>chain × date</b> (+ a product-level table for the latest date)", size:"~1k rows + ~55k rows",
    cols:"date, chain, products_compared, median_ratio, share_cheaper_in_eilat, share_pricier, expected_ratio (1/1.18)",
    from:"fact_price_period + dim_store + dim_product: shared barcodes, physical stores only, same chain Eilat vs outside", ex:"SHUFERSAL · 2026-11-15 · 16,618 · 0.847 · …"},

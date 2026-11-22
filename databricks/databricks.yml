@@ -201,9 +201,16 @@ resources:
             - task_key: build_dims
           notebook_task:
             notebook_path: ./notebooks/gold_facts.py
+        # G2: fixed basket (built once, frozen), 7-day price snapshot, price index views
+        - task_key: build_basket
+          depends_on:
+            - task_key: build_facts
+          notebook_task:
+            notebook_path: ./notebooks/gold_basket.py
         - task_key: log_run
           run_if: ALL_DONE
           depends_on:
+            - task_key: build_basket
             - task_key: build_facts
             - task_key: build_dims
           notebook_task:
