@@ -246,52 +246,6 @@ resources:
               max_minutes: "{{job.parameters.max_minutes}}"
               scope: "{{job.parameters.scope}}"
               job_run_id: "{{job.run_id}}"
-    # One-off scheduled classification runs (planned by Itai on November 18th, 2026; laptop off).
-    # Quartz cron without a year field fires again next year on the same date: delete both jobs after
-    # November 21st, 2026. Each one starts classify_products with its own parameters.
-    classify_qwen_active_once:
-      name: classify_qwen_active_once
-      max_concurrent_runs: 1
-      schedule:
-        quartz_cron_expression: "0 0 10 20 11 ?"
-        timezone_id: Asia/Jerusalem
-        pause_status: UNPAUSED
-      tasks:
-        - task_key: qwen_active
-          run_job_task:
-            job_id: ${resources.jobs.classify_products.id}
-            job_parameters:
-              mode: full
-              model: databricks-qwen35-122b-a10b
-              scope: active
-              max_minutes: "300"
-    classify_history_once:
-      name: classify_history_once
-      max_concurrent_runs: 1
-      schedule:
-        quartz_cron_expression: "0 0 6 21 11 ?"
-        timezone_id: Asia/Jerusalem
-        pause_status: UNPAUSED
-      tasks:
-        - task_key: gpt_oss_history
-          run_job_task:
-            job_id: ${resources.jobs.classify_products.id}
-            job_parameters:
-              mode: full
-              model: databricks-gpt-oss-120b
-              scope: history
-              max_minutes: "330"
-        - task_key: qwen_history
-          depends_on:
-            - task_key: gpt_oss_history
-          run_if: ALL_DONE
-          run_job_task:
-            job_id: ${resources.jobs.classify_products.id}
-            job_parameters:
-              mode: full
-              model: databricks-qwen35-122b-a10b
-              scope: history
-              max_minutes: "330"
     daily_load:
       name: daily_load
       max_concurrent_runs: 1
