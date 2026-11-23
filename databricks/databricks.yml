@@ -253,6 +253,25 @@ resources:
               max_minutes: "{{job.parameters.max_minutes}}"
               scope: "{{job.parameters.scope}}"
               job_run_id: "{{job.run_id}}"
+    # One-off: Qwen second opinion on the active products still missing (planned by Itai on November 23rd, 2026).
+    # Saturday has no daily_load, so the daily compute limit is free. The Quartz cron has no year field,
+    # so it would fire again next year: delete this job after November 28th, 2026.
+    classify_qwen_once:
+      name: classify_qwen_once
+      max_concurrent_runs: 1
+      schedule:
+        quartz_cron_expression: "0 0 6 28 11 ?"
+        timezone_id: Asia/Jerusalem
+        pause_status: UNPAUSED
+      tasks:
+        - task_key: qwen_active
+          run_job_task:
+            job_id: ${resources.jobs.classify_products.id}
+            job_parameters:
+              mode: full
+              model: databricks-qwen35-122b-a10b
+              scope: active
+              max_minutes: "300"
     daily_load:
       name: daily_load
       max_concurrent_runs: 1
